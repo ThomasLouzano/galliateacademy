@@ -25,25 +25,83 @@ export const api = {
       body: JSON.stringify({ email, senha }),
     }),
 
-  cadastrar: (nome, email, senha, cargo) =>
-    request('/usuarios/cadastrar', {
+  cadastrar: (nome, email, senha, cargo, telefone) => {
+    const payload = { nome, email, senha, cargo, telefone: telefone || undefined };
+    console.log('[api.cadastrar] enviando:', { ...payload, senha: '***' });
+    return request('/usuarios/cadastrar', {
       method: 'POST',
-      body: JSON.stringify({ nome, email, senha, cargo }),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
 
   // Usuários
   getUsuarios: () => request('/usuarios'),
 
   excluirUsuario: (id) => request(`/usuarios/${id}`, { method: 'DELETE' }),
 
-  // Módulos
-  getModulos: () => request('/modulos'),
+  // Trilhas
+  getTrilhas: () => request('/trilhas'),
 
-  criarModulo: (titulo, descricao) =>
+  getTrilhaById: (id) => request(`/trilhas/${id}`),
+
+  criarTrilha: (nome, descricao, icone) =>
+    request('/trilhas', {
+      method: 'POST',
+      body: JSON.stringify({ nome, descricao, icone }),
+    }),
+
+  atualizarTrilha: (id, nome, descricao, icone) =>
+    request(`/trilhas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ nome, descricao, icone }),
+    }),
+
+  reordenarTrilha: (id, ordem) =>
+    request(`/trilhas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ ordem }),
+    }),
+
+  excluirTrilha: (id) => request(`/trilhas/${id}`, { method: 'DELETE' }),
+
+  // Módulos
+  getModulos: (trilhaId) => request(trilhaId ? `/modulos?trilhaId=${trilhaId}` : '/modulos'),
+
+  getModuloById: (id) => request(`/modulos/${id}`),
+
+  criarModulo: (titulo, descricao, trilhaId) =>
     request('/modulos', {
       method: 'POST',
-      body: JSON.stringify({ titulo, descricao }),
+      body: JSON.stringify({ titulo, descricao, trilhaId: trilhaId || null }),
     }),
+
+  // Seções
+  getSecoes: (moduloId) => request(`/secoes?moduloId=${moduloId}`),
+
+  criarSecao: (titulo, moduloId, ordem) =>
+    request('/secoes', {
+      method: 'POST',
+      body: JSON.stringify({ titulo, moduloId, ordem }),
+    }),
+
+  excluirSecao: (id) => request(`/secoes/${id}`, { method: 'DELETE' }),
+
+  // Aulas
+  getAulas: (secaoId) => request(`/aulas?secaoId=${secaoId}`),
+
+  criarAula: (data) =>
+    request('/aulas', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  atualizarAula: (id, data) =>
+    request(`/aulas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  excluirAula: (id) => request(`/aulas/${id}`, { method: 'DELETE' }),
 
   // Progresso
   saveProgress: (lessonId) =>

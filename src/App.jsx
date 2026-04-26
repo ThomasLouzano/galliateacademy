@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
@@ -11,9 +12,13 @@ import Certificate from './pages/Certificate';
 import Ranking from './pages/Ranking';
 import Profile from './pages/Profile';
 import Manager from './pages/Manager';
+import Module from './pages/Module';
+import VideoPlayer from './pages/VideoPlayer';
 
 function RequireAuth() {
-  const { user, loading } = useAuth();
+  const auth = useAuth();
+  if (!auth) return null;
+  const { user, loading } = auth;
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#0D0D0D', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F9A800', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 18, letterSpacing: 2 }}>
       CARREGANDO...
@@ -24,16 +29,31 @@ function RequireAuth() {
 }
 
 function RequireManager() {
-  const { userRole } = useAuth();
+  const auth = useAuth();
+  if (!auth) return null;
+  const { userRole } = auth;
   if (userRole !== 'manager') return <Navigate to="/" replace />;
   return <Outlet />;
 }
 
 function AppLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const close = () => setSidebarOpen(false);
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#0D0D0D' }}>
-      <Sidebar />
-      <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+    <div className="app-layout">
+      {sidebarOpen && <div className="sidebar-overlay" onClick={close} />}
+      <Sidebar isOpen={sidebarOpen} onClose={close} />
+      <main className="app-main">
+        {/* top bar mobile */}
+        <div className="topbar">
+          <button className="hamburger" onClick={() => setSidebarOpen(o => !o)} aria-label="Menu">
+            <span /><span /><span />
+          </button>
+          <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 900, fontSize: 18, color: '#F9A800', letterSpacing: 2 }}>
+            GALLIATE ACADEMY
+          </span>
+        </div>
         <Outlet />
       </main>
     </div>
@@ -41,7 +61,9 @@ function AppLayout() {
 }
 
 function LoginPage() {
-  const { user, loading } = useAuth();
+  const auth = useAuth();
+  if (!auth) return null;
+  const { user, loading } = auth;
   if (loading) return null;
   if (user) return <Navigate to="/" replace />;
   return <Login />;
@@ -61,12 +83,14 @@ export default function App() {
               <Route path="/lesson/:trailId/:courseId/:lessonId" element={<Lesson />} />
               <Route path="/quiz/:trailId/:courseId" element={<Quiz />} />
               <Route path="/certificate/:trailId/:courseId" element={<Certificate />} />
+              <Route path="/modulo/:id" element={<Module />} />
               <Route path="/ranking" element={<Ranking />} />
               <Route path="/profile" element={<Profile />} />
               <Route element={<RequireManager />}>
                 <Route path="/manager" element={<Manager />} />
               </Route>
             </Route>
+            <Route path="/modulo/:moduloId/aula/:aulaId" element={<VideoPlayer />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,7 +1,15 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { api } from '../api/index.js';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext({
+  user: null,
+  userRole: null,
+  progress: {},
+  loading: true,
+  login: async () => {},
+  logout: () => {},
+  completeLesson: async () => {},
+});
 
 // Cargos que concedem acesso ao painel do gestor
 const MANAGER_KEYWORDS = [

@@ -53,3 +53,234 @@ input:focus {
 @media print {
   nav, aside { display: none !important; }
 }
+
+/* ── Layout principal ──────────────────────────────── */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #0D0D0D;
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Sidebar ───────────────────────────────────────── */
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: #0A0A0A;
+  border-right: 1px solid #1A1A1A;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  transition: transform 0.25s ease;
+  z-index: 200;
+  flex-shrink: 0;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+.hamburger {
+  display: none;
+}
+
+/* ── Page padding ──────────────────────────────────── */
+.page-padding {
+  padding: 32px 40px;
+  max-width: 1080px;
+}
+
+/* ── Grids responsivos ─────────────────────────────── */
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+/* ── Manager tabs ──────────────────────────────────── */
+.manager-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 28px;
+  background: #0A0A0A;
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+  flex-wrap: wrap;
+}
+
+/* ── Modal ─────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-box {
+  background: #161616;
+  border: 1px solid #2A2A2A;
+  border-radius: 16px;
+  padding: 32px 36px;
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* ── Top bar mobile ────────────────────────────────── */
+.topbar {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════
+   MOBILE  (≤ 768px)
+═══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Sidebar vira drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    transform: translateX(-100%);
+    z-index: 300;
+    width: 260px;
+    min-width: 260px;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 299;
+  }
+
+  /* Top bar com hamburguer */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #0A0A0A;
+    border-bottom: 1px solid #1A1A1A;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .hamburger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: #F9A800;
+    border-radius: 2px;
+    transition: all 0.2s;
+  }
+
+  /* Grids viram 1 coluna */
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .grid-3 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .grid-auto {
+    grid-template-columns: 1fr;
+  }
+
+  /* Page padding menor */
+  .page-padding {
+    padding: 16px;
+  }
+
+  /* Manager tabs scroll horizontal */
+  .manager-tabs {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modal ocupa tela toda */
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal-box {
+    border-radius: 16px 16px 0 0;
+    max-width: 100%;
+    max-height: 92vh;
+    padding: 24px 20px;
+  }
+
+  /* Visão geral do manager: tabela scroll */
+  .manager-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-4 {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}

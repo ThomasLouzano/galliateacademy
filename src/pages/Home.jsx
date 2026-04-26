@@ -26,15 +26,15 @@ export default function Home() {
   }
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: 1080, fontFamily: 'Barlow, sans-serif' }}>
+    <div className="page-padding" style={{ fontFamily: 'Barlow, sans-serif' }}>
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 38, fontWeight: 900, color: '#F0F0F0', lineHeight: 1 }}>
-          Olá, {user.name.split(' ')[0]}! <span style={{ color: '#F9A800' }}>👋</span>
+          Olá, {user.name?.split(' ')[0] ?? 'aluno'}! <span style={{ color: '#F9A800' }}>👋</span>
         </div>
         <div style={{ color: '#555', marginTop: 4, fontSize: 14 }}>Continue de onde parou — cada aula conta.</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div className="grid-4" style={{ marginBottom: 20 }}>
         {[
           ['XP Total', xp, 'pts', '#F9A800'],
           ['Aulas', doneLessons, `/${totalLessons}`, '#22A06B'],
@@ -66,7 +66,7 @@ export default function Home() {
             style={{
               background: '#F9A80015', border: '1px solid #F9A80033', borderRadius: 12,
               padding: '18px 24px', cursor: 'pointer', display: 'flex',
-              alignItems: 'center', gap: 14, whiteSpace: 'nowrap', transition: 'border-color .2s'
+              alignItems: 'center', gap: 14, transition: 'border-color .2s'
             }}
             onMouseEnter={e => e.currentTarget.style.borderColor = '#F9A80066'}
             onMouseLeave={e => e.currentTarget.style.borderColor = '#F9A80033'}
@@ -83,7 +83,7 @@ export default function Home() {
       <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 20, fontWeight: 800, color: '#E0E0E0', marginBottom: 14 }}>
         Trilhas de Treinamento
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+      <div className="grid-3">
         {TRILHAS.map(t => {
           const tp = trailProgress(t, progress);
           return (
