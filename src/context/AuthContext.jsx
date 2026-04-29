@@ -90,6 +90,7 @@ export function AuthProvider({ children }) {
       role: data.cargo ?? '',
       avatar: makeAvatar(data.nome),
       xp: data.xp ?? 0,
+      fotoUrl: data.fotoUrl ?? null,
       rank: null,
     };
 
@@ -110,6 +111,12 @@ export function AuthProvider({ children }) {
     setProgress({});
     localStorage.removeItem('ga_session');
     localStorage.removeItem('ga_token');
+  };
+
+  const updateUserData = (updates) => {
+    const updated = { ...user, ...updates };
+    setUser(updated);
+    persist(updated, userRole, progress);
   };
 
   const addXP = async (ganho) => {
@@ -136,7 +143,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, userRole, progress, loading, login, logout, completeLesson, addXP }}>
+    <AuthContext.Provider value={{ user, userRole, progress, loading, login, logout, completeLesson, addXP, updateUserData }}>
       {children}
     </AuthContext.Provider>
   );

@@ -37,6 +37,9 @@ export const api = {
   // Usuários
   getUsuarios: () => request('/usuarios'),
 
+  atualizarUsuario: (id, data) =>
+    request(`/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   excluirUsuario: (id) => request(`/usuarios/${id}`, { method: 'DELETE' }),
 
   adicionarXP: (userId, ganho) =>
@@ -166,6 +169,24 @@ export const api = {
       }
       return res.json();
     }),
+
+  // Upload foto de perfil
+  uploadFoto: (id, file) => {
+    const token = localStorage.getItem('ga_token');
+    const formData = new FormData();
+    formData.append('foto', file);
+    return fetch(`${BASE_URL}/usuarios/${id}/foto`, {
+      method: 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: formData,
+    }).then(async res => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.erro || `Erro ${res.status}`);
+      }
+      return res.json();
+    });
+  },
 
   // Auth (senha)
   forgotPassword: (email) =>
