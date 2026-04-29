@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TRILHAS } from '../data/lmsData';
 import { api } from '../api/index.js';
 import ProgressBar from '../components/ProgressBar';
 import {
@@ -143,31 +142,54 @@ const Toast = ({ msg, ok }) => {
   );
 };
 
-// ── dados mock de equipe (sem endpoint de listagem de usuários) ──
-const MOCK_TEAM = [
-  { id: 1, nome: 'Carlos Silva', cargo: 'Churrasqueiro / Grillman', avatar: 'CS', xp: 890, completed: 7, total: 14 },
-  { id: 2, nome: 'Ana Souza', cargo: 'Atendente / Caixa', avatar: 'AS', xp: 760, completed: 6, total: 14 },
-  { id: 3, nome: 'Bruno Lima', cargo: 'Entregador', avatar: 'BL', xp: 640, completed: 5, total: 14 },
-  { id: 4, nome: 'Julia Costa', cargo: 'Montador de lanche', avatar: 'JC', xp: 580, completed: 4, total: 14 },
-  { id: 5, nome: 'Pedro Rocha', cargo: 'Coordenador de Turno', avatar: 'PR', xp: 520, completed: 4, total: 14 },
-  { id: 6, nome: 'Mariana Neves', cargo: 'Supervisor / Gerente', avatar: 'MN', xp: 480, completed: 3, total: 14 },
-];
-
 // ═══════════════════════════════════════════════════════
 // SEÇÃO: Visão Geral
 // ═══════════════════════════════════════════════════════
-function SecaoVisaoGeral({ team }) {
-  const totalCourses = TRILHAS.flatMap(t => t.courses).length;
-  const avgCompletion = Math.round(team.reduce((a, u) => a + u.completed, 0) / team.length);
+function SecaoVisaoGeral() {
+  const [usuarios, setUsuarios] = useState([]);
+  const [trilhas, setTrilhas] = useState([]);
+  const [modulos, setModulos] = useState([]);
+  const [totalAulas, setTotalAulas] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.allSettled([
+      api.getUsuarios(),
+      api.getTrilhas(),
+      api.getModulos(),
+    ]).then(async ([resUsuarios, resTrilhas, resModulos]) => {
+      if (resUsuarios.status === 'fulfilled') {
+        const lista = Array.isArray(resUsuarios.value) ? resUsuarios.value : [];
+        setUsuarios([...lista].sort((a, b) => (b.xp || 0) - (a.xp || 0)));
+      }
+      if (resTrilhas.status === 'fulfilled') {
+        setTrilhas(Array.isArray(resTrilhas.value) ? resTrilhas.value : []);
+      }
+      if (resModulos.status === 'fulfilled') {
+        const mods = Array.isArray(resModulos.value) ? resModulos.value : [];
+        setModulos(mods);
+        if (mods.length > 0) {
+          const secoesResults = await Promise.allSettled(mods.map(m => api.getSecoes(m.id)));
+          const total = secoesResults.reduce((sum, r) => {
+            if (r.status !== 'fulfilled') return sum;
+            return sum + (r.value || []).reduce((s, sec) => s + (sec.aulas?.length || 0), 0);
+          }, 0);
+          setTotalAulas(total);
+        }
+      }
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const dash = loading ? '—' : undefined;
 
   return (
     <>
       <div className="grid-4" style={{ marginBottom: 26 }}>
         {[
-          ['Colaboradores', team.length, '#F9A800'],
-          ['Total de Cursos', totalCourses, '#22A06B'],
-          ['Média Cursos', avgCompletion, '#8B7FE8'],
-          ['Trilhas Ativas', TRILHAS.length, '#E05A2B'],
+          ['Colaboradores', dash ?? usuarios.length, '#F9A800'],
+          ['Trilhas',        dash ?? trilhas.length,  '#22A06B'],
+          ['Módulos',        dash ?? modulos.length,  '#8B7FE8'],
+          ['Aulas',          dash ?? totalAulas,       '#E05A2B'],
         ].map(([label, val, color]) => (
           <Card key={label}>
             <Label>{label.toUpperCase()}</Label>
@@ -176,55 +198,67 @@ function SecaoVisaoGeral({ team }) {
         ))}
       </div>
 
-      <div className="grid-2" style={{ marginBottom: 26 }}>
-        {TRILHAS.map(t => {
-          const avgPct = Math.round(team.slice(0, 3).reduce((a, u) => a + (u.completed / u.total * 100), 0) / 3);
-          return (
-            <div key={t.id} style={{ background: '#161616', border: `1px solid ${t.color}22`, borderRadius: 12, padding: '18px 22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 18 }}>{t.icon}</span>
-                <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 16, fontWeight: 800, color: '#E0E0E0' }}>Trilha {t.name}</span>
-                <span style={{ marginLeft: 'auto', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 800, color: t.color }}>{t.courses.length} cursos</span>
-              </div>
-              <ProgressBar pct={avgPct} color={t.color} h={5} />
-              <div style={{ fontSize: 11, color: '#3A3A3A', marginTop: 5 }}>Média da equipe: {avgPct}%</div>
-            </div>
-          );
-        })}
-      </div>
+      {!loading && trilhas.length > 0 && (
+        <>
+          <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 17, fontWeight: 800, color: '#E0E0E0', marginBottom: 12 }}>
+            Trilhas de Treinamento
+          </div>
+          <div className="grid-2" style={{ marginBottom: 26 }}>
+            {trilhas.map(t => {
+              const qtdMods = modulos.filter(m => m.trilhaId === t.id).length || t.modulos?.length || 0;
+              return (
+                <div key={t.id} style={{ background: '#161616', border: '1px solid #F9A80022', borderRadius: 12, padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 22, flexShrink: 0 }}>{t.icone}</span>
+                  <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 16, fontWeight: 800, color: '#E0E0E0', flex: 1 }}>{t.nome}</span>
+                  <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 800, color: '#F9A80088', flexShrink: 0 }}>
+                    {qtdMods} módulo{qtdMods !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 17, fontWeight: 800, color: '#E0E0E0', marginBottom: 12 }}>
-        Progresso Individual
+        Colaboradores Mais Ativos
       </div>
       <div className="manager-table-wrap">
-      <div style={{ background: '#161616', border: '1px solid #1E1E1E', borderRadius: 12, overflow: 'hidden', minWidth: 560 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.6fr .8fr .8fr 1.4fr', padding: '10px 18px', background: '#0A0A0A', fontSize: 9, fontWeight: 800, color: '#2E2E2E', letterSpacing: 2.5, fontFamily: 'Barlow Condensed, sans-serif' }}>
-          <span>COLABORADOR</span><span>CARGO</span><span>XP</span><span>CURSOS</span><span>PROGRESSO</span>
-        </div>
-        {team.map(u => {
-          const pct = Math.round(u.completed / u.total * 100);
-          const col = pct >= 50 ? '#22A06B' : pct >= 30 ? '#F9A800' : '#E05A2B';
-          const av = u.avatar || u.nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-          return (
-            <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1.6fr .8fr .8fr 1.4fr', padding: '14px 18px', borderTop: '1px solid #141414', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#F9A80022', border: '2px solid #F9A80055', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 11, color: '#F9A800', flexShrink: 0 }}>{av}</div>
-                <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 700, color: '#DDD' }}>{u.nome || u.name}</span>
-              </div>
-              <span style={{ fontSize: 11, color: '#555' }}>{u.cargo || u.role}</span>
-              <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, color: '#F9A800', fontSize: 15 }}>{u.xp || 0}</span>
-              <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, color: '#DDD', fontSize: 15 }}>
-                {u.completed}<span style={{ color: '#2E2E2E', fontSize: 11 }}>/{u.total}</span>
-              </span>
-              <div>
-                <ProgressBar pct={pct} color={col} h={5} />
-                <span style={{ fontSize: 10, color: '#3A3A3A' }}>{pct}%</span>
-              </div>
+        <div style={{ background: '#161616', border: '1px solid #1E1E1E', borderRadius: 12, overflow: 'hidden', minWidth: 480 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', padding: '10px 18px', background: '#0A0A0A', fontSize: 9, fontWeight: 800, color: '#2E2E2E', letterSpacing: 2.5, fontFamily: 'Barlow Condensed, sans-serif' }}>
+            <span>COLABORADOR</span><span>CARGO</span><span>XP</span>
+          </div>
+          {loading ? (
+            <div style={{ padding: '24px 18px', color: '#444', fontSize: 13 }}>Carregando...</div>
+          ) : usuarios.length === 0 ? (
+            <div style={{ padding: '32px 18px', color: '#333', fontSize: 13, textAlign: 'center' }}>
+              Nenhum colaborador cadastrado ainda.
             </div>
-          );
-        })}
+          ) : (
+            usuarios.map((u, idx) => {
+              const av = (u.nome || '?').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase();
+              const destaque = idx < 3;
+              return (
+                <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', padding: '14px 18px', borderTop: '1px solid #141414', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                      background: destaque ? '#F9A80022' : '#1A1A1A',
+                      border: `2px solid ${destaque ? '#F9A80055' : '#2A2A2A'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 11,
+                      color: destaque ? '#F9A800' : '#555',
+                    }}>{av}</div>
+                    <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 700, color: '#DDD' }}>{u.nome}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: '#555' }}>{u.cargo}</span>
+                  <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 900, color: '#F9A800', fontSize: 16 }}>{u.xp || 0}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
-      </div>{/* /manager-table-wrap */}
     </>
   );
 }
@@ -2713,7 +2747,7 @@ export default function Manager() {
         ))}
       </div>
 
-      {tab === 'visao' && <SecaoVisaoGeral team={MOCK_TEAM} />}
+      {tab === 'visao' && <SecaoVisaoGeral />}
       {tab === 'trilhas' && <SecaoTrilhas toast={showToast} />}
       {tab === 'modulos' && <SecaoModulos toast={showToast} />}
       {tab === 'avaliacoes' && <SecaoAvaliacoes toast={showToast} />}
