@@ -2164,9 +2164,14 @@ function SecaoColaboradores({ toast }) {
   const [senha, setSenha] = useState('');
   const [telefone, setTelefone] = useState('');
   const [cargo, setCargo] = useState(CARGOS[0]);
+  const [tipo, setTipo] = useState('colaborador');
   const [saving, setSaving] = useState(false);
-  // Guarda os dados do último cadastro bem-sucedido para o botão de WhatsApp
   const [cadastrado, setCadastrado] = useState(null);
+
+  const handleTipo = (t) => {
+    setTipo(t);
+    setCargo(t === 'gestor' ? 'gestor' : CARGOS[0]);
+  };
 
   const handleCadastrar = async () => {
     if (!nome.trim() || !email.trim() || !senha.trim()) {
@@ -2180,13 +2185,13 @@ function SecaoColaboradores({ toast }) {
     setSaving(true);
     try {
       await api.cadastrar(nome.trim(), email.trim(), senha, cargo, telefone.trim());
-      toast(`Colaborador "${nome.trim()}" cadastrado com sucesso!`, true);
-      // Salva antes de limpar para o botão de WhatsApp poder usar
+      toast(`${tipo === 'gestor' ? 'Gestor' : 'Colaborador'} "${nome.trim()}" cadastrado com sucesso!`, true);
       setCadastrado({ nome: nome.trim(), email: email.trim(), senha, telefone: telefone.trim() });
       setNome('');
       setEmail('');
       setSenha('');
       setTelefone('');
+      setTipo('colaborador');
       setCargo(CARGOS[0]);
     } catch (e) {
       toast(e.message || 'Erro ao cadastrar colaborador', false);
@@ -2208,9 +2213,23 @@ function SecaoColaboradores({ toast }) {
     <div className="grid-2">
       {/* Formulário */}
       <Card>
-        <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 18, fontWeight: 800, color: '#F0F0F0', marginBottom: 18 }}>
-          Cadastrar Colaborador
+        <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 18, fontWeight: 800, color: '#F0F0F0', marginBottom: 14 }}>
+          Cadastrar Usuário
         </div>
+
+        {/* Seletor de tipo */}
+        <div style={{ display: 'flex', background: '#0D0D0D', borderRadius: 8, padding: 3, marginBottom: 18, gap: 4 }}>
+          {[['colaborador', '👤 Colaborador'], ['gestor', '⚙️ Gestor']].map(([t, label]) => (
+            <button key={t} onClick={() => handleTipo(t)} style={{
+              flex: 1, padding: '8px 0', borderRadius: 6, border: 'none',
+              background: tipo === t ? '#FFC107' : 'transparent',
+              color: tipo === t ? '#000' : '#555',
+              fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, fontSize: 13,
+              cursor: 'pointer', transition: 'all .2s',
+            }}>{label}</button>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Input
             label="Nome completo *"
@@ -2239,11 +2258,17 @@ function SecaoColaboradores({ toast }) {
             onChange={e => setTelefone(e.target.value)}
             placeholder="(11) 99999-9999"
           />
-          <Select label="Cargo" value={cargo} onChange={e => setCargo(e.target.value)}>
-            {CARGOS.map(c => <option key={c} value={c}>{c}</option>)}
-          </Select>
+          {tipo === 'colaborador' ? (
+            <Select label="Cargo" value={cargo} onChange={e => setCargo(e.target.value)}>
+              {CARGOS.map(c => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          ) : (
+            <div style={{ padding: '10px 14px', background: '#FFC10710', border: '1px solid #FFC10733', borderRadius: 8, fontSize: 12, color: '#FFC107', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700 }}>
+              ⚙️ Acesso ao Painel do Gestor será concedido automaticamente
+            </div>
+          )}
           <Btn onClick={handleCadastrar} loading={saving} style={{ alignSelf: 'flex-start' }}>
-            + CADASTRAR COLABORADOR
+            + CADASTRAR {tipo === 'gestor' ? 'GESTOR' : 'COLABORADOR'}
           </Btn>
         </div>
       </Card>
@@ -2564,6 +2589,126 @@ function SecaoListaColaboradores({ toast }) {
 
   const nivel = (xp = 0) => Math.floor(xp / 300) + 1;
 
+  const isGestorCargo = (cargo = '') => {
+    const kws = ['admin', 'gestor', 'gestora', 'gerente', 'supervisor', 'supervisora', 'coordenador', 'coordenadora'];
+    return (cargo ?? '').split(/[/,;]/).map(p => p.trim().toLowerCase()).some(p => kws.some(kw => p.includes(kw)));
+  };
+
+  const renderCard = (u) => {
+    const av = (u.nome ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??';
+    const isExcluindo = excluindo === u.id;
+    const gestor = isGestorCargo(u.cargo);
+    return (
+      <div
+        key={u.id}
+        style={{
+          background: '#161616',
+          border: `1px solid ${gestor ? '#FFC10722' : '#1E1E1E'}`,
+          borderRadius: 12, padding: '18px 20px',
+          display: 'flex', flexDirection: 'column', gap: 12,
+          transition: 'border-color .15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = gestor ? '#FFC10744' : '#2A2A2A'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = gestor ? '#FFC10722' : '#1E1E1E'}
+      >
+        {/* cabeçalho */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+            background: gestor ? '#FFC10722' : '#F9A80022',
+            border: `2px solid ${gestor ? '#FFC10755' : '#F9A80055'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 900, fontSize: 14,
+            color: gestor ? '#FFC107' : '#F9A800',
+          }}>{av}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 16, fontWeight: 800, color: '#E0E0E0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.nome}</div>
+            <div style={{ fontSize: 11, color: '#555', marginTop: 1 }}>{u.cargo}</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
+            {gestor && (
+              <div style={{ background: '#FFC10722', border: '1px solid #FFC10744', borderRadius: 20, padding: '2px 9px', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, fontWeight: 800, color: '#FFC107', letterSpacing: 0.5 }}>
+                ⚙️ GESTOR
+              </div>
+            )}
+            <div style={{ background: '#F9A80015', border: '1px solid #F9A80033', borderRadius: 20, padding: '3px 10px', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 12, fontWeight: 800, color: '#F9A800' }}>
+              Nv {nivel(u.xp)}
+            </div>
+          </div>
+        </div>
+
+        {/* dados */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#555' }}>
+            <span style={{ color: '#333', fontSize: 13 }}>✉</span>
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</span>
+          </div>
+          {u.telefone && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#555' }}>
+              <span style={{ color: '#333', fontSize: 13 }}>💬</span>
+              <span>{u.telefone}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#555' }}>
+            <span style={{ color: '#333', fontSize: 13 }}>📅</span>
+            <span>{u.criadoEm ? new Date(u.criadoEm).toLocaleDateString('pt-BR') : '—'}</span>
+          </div>
+          {u.xp > 0 && (
+            <div style={{ marginTop: 2 }}>
+              <ProgressBar pct={((u.xp % 300) / 300) * 100} color="#F9A800" h={3} />
+              <span style={{ fontSize: 10, color: '#3A3A3A' }}>{u.xp} XP</span>
+            </div>
+          )}
+        </div>
+
+        {/* ações */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+          <button
+            onClick={() => setPerfil(u)}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid #2A2A2A',
+              background: '#1A1A1A', color: '#AAA', cursor: 'pointer',
+              fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 700,
+              transition: 'all .15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#F9A80055'; e.currentTarget.style.color = '#F9A800'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#AAA'; }}
+          >VER PERFIL</button>
+          <button
+            onClick={() => handleExcluir(u)}
+            disabled={isExcluindo}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 7,
+              border: '1px solid #E05A2B44', background: '#E05A2B11',
+              color: isExcluindo ? '#555' : '#E05A2B', cursor: isExcluindo ? 'not-allowed' : 'pointer',
+              fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 700,
+              transition: 'all .15s', opacity: isExcluindo ? 0.5 : 1,
+            }}
+            onMouseEnter={e => { if (!isExcluindo) e.currentTarget.style.background = '#E05A2B22'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#E05A2B11'; }}
+          >{isExcluindo ? 'EXCLUINDO...' : 'EXCLUIR'}</button>
+        </div>
+        {import.meta.env.DEV && (
+          <button
+            onClick={() => setSimularUsuario(u)}
+            style={{
+              width: '100%', padding: '7px 0', borderRadius: 7,
+              border: '1px dashed #7C3AED44', background: 'transparent',
+              color: '#7C3AED99', cursor: 'pointer',
+              fontFamily: 'Barlow Condensed, sans-serif', fontSize: 12, fontWeight: 700,
+              transition: 'all .15s', letterSpacing: 0.5,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#7C3AED88'; e.currentTarget.style.color = '#7C3AED'; e.currentTarget.style.background = '#7C3AED11'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#7C3AED44'; e.currentTarget.style.color = '#7C3AED99'; e.currentTarget.style.background = 'transparent'; }}
+          >🧪 Simular Conclusão</button>
+        )}
+      </div>
+    );
+  };
+
+  const gestores = usuarios.filter(u => isGestorCargo(u.cargo));
+  const colaboradores = usuarios.filter(u => !isGestorCargo(u.cargo));
+
   return (
     <>
       <ModalPerfil usuario={perfil} onClose={() => setPerfil(null)} />
@@ -2577,7 +2722,10 @@ function SecaoListaColaboradores({ toast }) {
             Colaboradores Cadastrados
           </div>
           {!loading && (
-            <div style={{ fontSize: 12, color: '#444', marginTop: 2 }}>{usuarios.length} colaborador{usuarios.length !== 1 ? 'es' : ''}</div>
+            <div style={{ fontSize: 12, color: '#444', marginTop: 2 }}>
+              {gestores.length > 0 && `${gestores.length} gestor${gestores.length !== 1 ? 'es' : ''} · `}
+              {colaboradores.length} colaborador{colaboradores.length !== 1 ? 'es' : ''}
+            </div>
           )}
         </div>
         <Btn variant="ghost" onClick={carregar} style={{ fontSize: 12, padding: '7px 14px' }}>↻ ATUALIZAR</Btn>
@@ -2588,111 +2736,33 @@ function SecaoListaColaboradores({ toast }) {
       ) : usuarios.length === 0 ? (
         <Card style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ fontSize: 32, marginBottom: 10 }}>👤</div>
-          <div style={{ color: '#333', fontSize: 14 }}>Nenhum colaborador cadastrado ainda.</div>
+          <div style={{ color: '#333', fontSize: 14 }}>Nenhum usuário cadastrado ainda.</div>
         </Card>
       ) : (
-        <div className="grid-auto">
-          {usuarios.map(u => {
-            const av = (u.nome ?? '').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??';
-            const isExcluindo = excluindo === u.id;
-            return (
-              <div
-                key={u.id}
-                style={{
-                  background: '#161616', border: '1px solid #1E1E1E', borderRadius: 12,
-                  padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12,
-                  transition: 'border-color .15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#2A2A2A'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = '#1E1E1E'}
-              >
-                {/* cabeçalho do card */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{
-                    width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
-                    background: '#F9A80022', border: '2px solid #F9A80055',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 900, fontSize: 14, color: '#F9A800',
-                  }}>{av}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 16, fontWeight: 800, color: '#E0E0E0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.nome}</div>
-                    <div style={{ fontSize: 11, color: '#555', marginTop: 1 }}>{u.cargo}</div>
-                  </div>
-                  {/* badge nível */}
-                  <div style={{ flexShrink: 0, background: '#F9A80015', border: '1px solid #F9A80033', borderRadius: 20, padding: '3px 10px', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 12, fontWeight: 800, color: '#F9A800' }}>
-                    Nv {nivel(u.xp)}
-                  </div>
-                </div>
-
-                {/* dados */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#555' }}>
-                    <span style={{ color: '#333', fontSize: 13 }}>✉</span>
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</span>
-                  </div>
-                  {u.telefone && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#555' }}>
-                      <span style={{ color: '#333', fontSize: 13 }}>💬</span>
-                      <span>{u.telefone}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#555' }}>
-                    <span style={{ color: '#333', fontSize: 13 }}>📅</span>
-                    <span>{u.criadoEm ? new Date(u.criadoEm).toLocaleDateString('pt-BR') : '—'}</span>
-                  </div>
-                  {u.xp > 0 && (
-                    <div style={{ marginTop: 2 }}>
-                      <ProgressBar pct={((u.xp % 300) / 300) * 100} color="#F9A800" h={3} />
-                      <span style={{ fontSize: 10, color: '#3A3A3A' }}>{u.xp} XP</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* ações */}
-                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-                  <button
-                    onClick={() => setPerfil(u)}
-                    style={{
-                      flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid #2A2A2A',
-                      background: '#1A1A1A', color: '#AAA', cursor: 'pointer',
-                      fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 700,
-                      transition: 'all .15s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#F9A80055'; e.currentTarget.style.color = '#F9A800'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#AAA'; }}
-                  >VER PERFIL</button>
-                  <button
-                    onClick={() => handleExcluir(u)}
-                    disabled={isExcluindo}
-                    style={{
-                      flex: 1, padding: '8px 0', borderRadius: 7,
-                      border: '1px solid #E05A2B44', background: '#E05A2B11',
-                      color: isExcluindo ? '#555' : '#E05A2B', cursor: isExcluindo ? 'not-allowed' : 'pointer',
-                      fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 700,
-                      transition: 'all .15s', opacity: isExcluindo ? 0.5 : 1,
-                    }}
-                    onMouseEnter={e => { if (!isExcluindo) e.currentTarget.style.background = '#E05A2B22'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#E05A2B11'; }}
-                  >{isExcluindo ? 'EXCLUINDO...' : 'EXCLUIR'}</button>
-                </div>
-                {import.meta.env.DEV && (
-                  <button
-                    onClick={() => setSimularUsuario(u)}
-                    style={{
-                      width: '100%', padding: '7px 0', borderRadius: 7,
-                      border: '1px dashed #7C3AED44', background: 'transparent',
-                      color: '#7C3AED99', cursor: 'pointer',
-                      fontFamily: 'Barlow Condensed, sans-serif', fontSize: 12, fontWeight: 700,
-                      transition: 'all .15s', letterSpacing: 0.5,
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#7C3AED88'; e.currentTarget.style.color = '#7C3AED'; e.currentTarget.style.background = '#7C3AED11'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#7C3AED44'; e.currentTarget.style.color = '#7C3AED99'; e.currentTarget.style.background = 'transparent'; }}
-                  >🧪 Simular Conclusão</button>
-                )}
+        <>
+          {gestores.length > 0 && (
+            <>
+              <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, fontWeight: 800, color: '#FFC107', letterSpacing: 2.5, marginBottom: 12 }}>
+                ⚙️ GESTORES
               </div>
-            );
-          })}
-        </div>
+              <div className="grid-auto" style={{ marginBottom: colaboradores.length > 0 ? 28 : 0 }}>
+                {gestores.map(u => renderCard(u))}
+              </div>
+            </>
+          )}
+          {colaboradores.length > 0 && (
+            <>
+              {gestores.length > 0 && (
+                <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, fontWeight: 800, color: '#555', letterSpacing: 2.5, marginBottom: 12 }}>
+                  👤 COLABORADORES
+                </div>
+              )}
+              <div className="grid-auto">
+                {colaboradores.map(u => renderCard(u))}
+              </div>
+            </>
+          )}
+        </>
       )}
     </>
   );
