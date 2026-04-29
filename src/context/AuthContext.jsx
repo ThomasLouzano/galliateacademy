@@ -9,6 +9,7 @@ const AuthContext = createContext({
   login: async () => {},
   logout: () => {},
   completeLesson: async () => {},
+  addXP: async () => {},
 });
 
 // Cargos que concedem acesso ao painel do gestor
@@ -84,11 +85,11 @@ export function AuthProvider({ children }) {
     const data = await api.login(email.trim(), senha);
 
     const u = {
-      id: null,
+      id: data.id ?? null,
       name: data.nome ?? '',
       role: data.cargo ?? '',
       avatar: makeAvatar(data.nome),
-      xp: 0,
+      xp: data.xp ?? 0,
       rank: null,
     };
 
@@ -111,6 +112,18 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('ga_token');
   };
 
+  const addXP = async (ganho) => {
+    if (!user?.id || !ganho) return;
+    try {
+      const { xp: novoXP } = await api.adicionarXP(user.id, ganho);
+      const updated = { ...user, xp: novoXP };
+      setUser(updated);
+      persist(updated, userRole, progress);
+    } catch (e) {
+      console.error('[addXP] erro:', e);
+    }
+  };
+
   const completeLesson = async (lessonId) => {
     const updated = { ...progress, [lessonId]: true };
     setProgress(updated);
@@ -123,7 +136,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, userRole, progress, loading, login, logout, completeLesson }}>
+    <AuthContext.Provider value={{ user, userRole, progress, loading, login, logout, completeLesson, addXP }}>
       {children}
     </AuthContext.Provider>
   );

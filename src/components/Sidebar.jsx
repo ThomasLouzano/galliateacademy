@@ -37,6 +37,7 @@ export default function Sidebar({ isOpen, onClose }) {
   const navItems = [
     { id: 'home', icon: '⌂', label: 'Início' },
     { id: 'ranking', icon: '🏆', label: 'Ranking' },
+    { id: 'certificados', icon: '🎓', label: 'Meus Certificados' },
     { id: 'profile', icon: '◉', label: 'Meu Perfil' },
   ];
 

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/index.js';
+import PdfReader from '../components/PdfReader.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 // ── helpers ─────────────────────────────────────────────
 const getYouTubeId = (url = '') => {
@@ -59,6 +61,7 @@ function ChecklistItem({ label, checked, onChange }) {
 export default function VideoPlayer() {
   const { moduloId, aulaId } = useParams();
   const navigate = useNavigate();
+  const { user, addXP } = useAuth();
 
   // dados
   const [modulo, setModulo] = useState(null);
@@ -73,12 +76,15 @@ export default function VideoPlayer() {
   const [videoTerminou, setVideoTerminou] = useState(false);
   const [checkedItems, setCheckedItems] = useState({});
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
-  const [playing, setPlaying] = useState(false);
+  const [apostilaAberta, setApostilaAberta] = useState(false);
+  const [temAvaliacao, setTemAvaliacao] = useState(false);
+  const [emitindoCert, setEmitindoCert] = useState(false);
 
   const ytContainerRef = useRef(null);
   const ytPlayerRef = useRef(null);
   const pollRef = useRef(null);
   const maxPosRef = useRef(0);
+  const xpConcedidoRef = useRef(false);
 
   // responsive
   useEffect(() => {
@@ -87,20 +93,25 @@ export default function VideoPlayer() {
     return () => window.removeEventListener('resize', fn);
   }, []);
 
-  // carrega módulo + seções
+  // carrega módulo + seções + verifica avaliação
   useEffect(() => {
     setLoading(true);
     setErro(null);
-    Promise.all([api.getModuloById(moduloId), api.getSecoes(moduloId)])
-      .then(([mod, secs]) => {
+    Promise.allSettled([api.getModuloById(moduloId), api.getSecoes(moduloId), api.getAvaliacoes(moduloId)])
+      .then(([resMod, resSecs, resAvs]) => {
+        if (resMod.status !== 'fulfilled') { setErro(resMod.reason?.message || 'Erro ao carregar módulo'); return; }
+        if (resSecs.status !== 'fulfilled') { setErro(resSecs.reason?.message || 'Erro ao carregar seções'); return; }
+        const mod = resMod.value;
+        const s = Array.isArray(resSecs.value) ? resSecs.value : [];
         setModulo(mod);
-        const s = Array.isArray(secs) ? secs : [];
         setSecoes(s);
         const todas = s.flatMap(sec => sec.aulas || []);
         setTodasAulas(todas);
         setAula(todas.find(a => a.id === Number(aulaId)) ?? null);
+        if (resAvs.status === 'fulfilled') {
+          setTemAvaliacao(Array.isArray(resAvs.value) && resAvs.value.length > 0);
+        }
       })
-      .catch(e => setErro(e.message || 'Erro ao carregar'))
       .finally(() => setLoading(false));
   }, [moduloId]);
 
@@ -112,6 +123,7 @@ export default function VideoPlayer() {
     setVideoTerminou(false);
     setCheckedItems({});
     maxPosRef.current = 0;
+    xpConcedidoRef.current = false;
   }, [aulaId, todasAulas]);
 
   // YouTube IFrame API
@@ -136,23 +148,22 @@ export default function VideoPlayer() {
 
       ytPlayerRef.current = new window.YT.Player(target, {
         videoId: ytId,
-        playerVars: { controls: 0, rel: 0, modestbranding: 1, showinfo: 0, fs: 0 },
+        playerVars: { controls: 1, rel: 0, modestbranding: 1, fs: 0 },
         events: {
           onReady(e) {
-            // faz o iframe preencher o container
             const iframe = e.target.getIframe();
             iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;';
           },
           onStateChange(e) {
             const { PlayerState } = window.YT;
             if (e.data === PlayerState.PLAYING) {
-              setPlaying(true);
               if (pollRef.current) clearInterval(pollRef.current);
               pollRef.current = setInterval(() => {
                 const p = ytPlayerRef.current;
                 if (!p?.getCurrentTime) return;
                 const cur = p.getCurrentTime();
                 const dur = p.getDuration() || 1;
+                // Só bloqueia pulo pra frente além do máximo já assistido
                 if (cur > maxPosRef.current + 2.5) {
                   p.seekTo(maxPosRef.current, true);
                 } else {
@@ -161,7 +172,6 @@ export default function VideoPlayer() {
                 }
               }, 500);
             } else {
-              setPlaying(false);
               if (pollRef.current) clearInterval(pollRef.current);
               if (e.data === window.YT.PlayerState.ENDED) {
                 setVideoTerminou(true);
@@ -194,6 +204,18 @@ export default function VideoPlayer() {
     };
   }, [aula]);
 
+  const handleEmitirCertificado = async () => {
+    if (emitindoCert || !user?.id) return;
+    setEmitindoCert(true);
+    try {
+      const cert = await api.gerarCertificado(user.id, Number(moduloId), null, null);
+      navigate(`/certificado/${cert.codigoValidacao}`);
+    } catch (e) {
+      alert(e.message || 'Erro ao gerar certificado');
+      setEmitindoCert(false);
+    }
+  };
+
   // ── derivações ───────────────────────────────────────
   const checklist = (() => {
     try { return aula?.checklist ? JSON.parse(aula.checklist) : []; }
@@ -206,8 +228,24 @@ export default function VideoPlayer() {
   const proximaAula = currentIdx >= 0 && currentIdx < todasAulas.length - 1 ? todasAulas[currentIdx + 1] : null;
   const podeAvancar = videoTerminou && todosMarcados;
 
+  // Progresso + XP: salva no backend quando vídeo + checklist concluídos
+  useEffect(() => {
+    if (!videoTerminou || !todosMarcados) return;
+    if (xpConcedidoRef.current || !user?.id || !aula) return;
+    xpConcedidoRef.current = true;
+
+    api.saveProgress(user.id, Number(aulaId))
+      .then(({ xpGanho, moduloConcluido, xpBonus }) => {
+        const total = (xpGanho || 0) + (moduloConcluido ? (xpBonus || 0) : 0);
+        if (total > 0) addXP(total);
+      })
+      .catch(e => console.error('[VideoPlayer] erro ao salvar progresso:', e));
+  }, [videoTerminou, todosMarcados]);
+
   const ytId = getYouTubeId(aula?.videoUrl ?? '');
   const vimeoId = !ytId ? getVimeoId(aula?.videoUrl ?? '') : null;
+  const apostilaUrl = aula?.apostilaUrl ?? null;
+  const apostilaEhPdf = apostilaUrl && (apostilaUrl.toLowerCase().endsWith('.pdf') || apostilaUrl.includes('/uploads/'));
 
   // ── estados de feedback ──────────────────────────────
   if (loading) {
@@ -287,31 +325,6 @@ export default function VideoPlayer() {
             {ytId ? (
               <div style={{ position: 'relative', paddingTop: '56.25%', background: '#000' }}>
                 <div ref={ytContainerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-                {/* overlay: bloqueia seeking por clique, mas togla play/pause */}
-                <div
-                  onClick={() => {
-                    const p = ytPlayerRef.current;
-                    if (!p) return;
-                    playing ? p.pauseVideo() : p.playVideo();
-                  }}
-                  style={{
-                    position: 'absolute', inset: 0, zIndex: 10,
-                    background: 'transparent', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  {!playing && (
-                    <div style={{
-                      width: 64, height: 64, borderRadius: '50%',
-                      background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      border: '2px solid rgba(255,255,255,.15)',
-                      pointerEvents: 'none',
-                    }}>
-                      <span style={{ fontSize: 26, color: '#fff', marginLeft: 4, lineHeight: 1 }}>▶</span>
-                    </div>
-                  )}
-                </div>
               </div>
             ) : vimeoId ? (
               <div style={{ position: 'relative', paddingTop: '56.25%' }}>
@@ -395,6 +408,32 @@ export default function VideoPlayer() {
             </div>
           )}
 
+          {/* Apostila */}
+          {apostilaUrl && (
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 900, color: '#F9A800', letterSpacing: 2 }}>APOSTILA</div>
+                <button
+                  onClick={() => apostilaEhPdf ? setApostilaAberta(a => !a) : window.open(apostilaUrl, '_blank')}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7,
+                    padding: '7px 16px', background: '#F9A80015', border: '1px solid #F9A80044',
+                    borderRadius: 8, cursor: 'pointer', color: '#F9A800',
+                    fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 800,
+                    letterSpacing: 0.5, transition: 'all .15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#F9A80025'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#F9A80015'; }}
+                >
+                  📄 {apostilaEhPdf ? (apostilaAberta ? 'Fechar Apostila' : 'Ver Apostila') : 'Abrir Apostila'}
+                </button>
+              </div>
+              {apostilaAberta && apostilaEhPdf && (
+                <PdfReader url={apostilaUrl} />
+              )}
+            </div>
+          )}
+
           {/* Botão próxima aula */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: 40 }}>
             {proximaAula ? (
@@ -425,11 +464,31 @@ export default function VideoPlayer() {
             ) : videoTerminou && todosMarcados ? (
               <div style={{ background: '#FFC10715', border: '1px solid #FFC10733', borderRadius: 12, padding: '22px 28px', textAlign: 'center', width: '100%' }}>
                 <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 22, fontWeight: 900, color: '#FFC107', marginBottom: 6 }}>🎉 MÓDULO CONCLUÍDO!</div>
-                <div style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Você completou todas as aulas deste módulo.</div>
-                <button
-                  onClick={() => navigate(`/modulo/${moduloId}`)}
-                  style={{ padding: '11px 28px', background: '#FFC107', border: 'none', borderRadius: 8, color: '#000', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 900, cursor: 'pointer' }}
-                >← VOLTAR AO MÓDULO</button>
+                <div style={{ fontSize: 13, color: '#666', marginBottom: 20 }}>Você completou todas as aulas deste módulo.</div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  {temAvaliacao ? (
+                    <button
+                      onClick={() => navigate(`/modulo/${moduloId}/avaliacao`)}
+                      style={{ padding: '13px 28px', background: '#FFC107', border: 'none', borderRadius: 9, color: '#000', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 15, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 20px #FFC10740', transition: 'background .15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#FFD54F'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#FFC107'}
+                    >📝 FAZER AVALIAÇÃO →</button>
+                  ) : (
+                    <button
+                      onClick={handleEmitirCertificado}
+                      disabled={emitindoCert}
+                      style={{ padding: '13px 28px', background: emitindoCert ? '#111' : '#FFC107', border: `1px solid ${emitindoCert ? '#2A2A2A' : '#FFC107'}`, borderRadius: 9, color: emitindoCert ? '#444' : '#000', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 15, fontWeight: 900, cursor: emitindoCert ? 'not-allowed' : 'pointer', boxShadow: emitindoCert ? 'none' : '0 4px 20px #FFC10740', transition: 'all .15s', letterSpacing: 1 }}
+                      onMouseEnter={e => { if (!emitindoCert) e.currentTarget.style.background = '#FFD54F'; }}
+                      onMouseLeave={e => { if (!emitindoCert) e.currentTarget.style.background = emitindoCert ? '#111' : '#FFC107'; }}
+                    >🎓 {emitindoCert ? 'GERANDO...' : 'EMITIR CERTIFICADO'}</button>
+                  )}
+                  <button
+                    onClick={() => navigate(`/modulo/${moduloId}`)}
+                    style={{ padding: '13px 22px', background: 'transparent', border: '1px solid #2A2A2A', borderRadius: 9, color: '#666', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 800, cursor: 'pointer', transition: 'all .15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#CCC'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#666'; }}
+                  >← VOLTAR AO MÓDULO</button>
+                </div>
               </div>
             ) : null}
           </div>

@@ -14,6 +14,9 @@ import Profile from './pages/Profile';
 import Manager from './pages/Manager';
 import Module from './pages/Module';
 import VideoPlayer from './pages/VideoPlayer';
+import AvaliacaoPage from './pages/AvaliacaoPage';
+import CertificadoPage from './pages/CertificadoPage';
+import MeusCertificadosPage from './pages/MeusCertificadosPage';
 
 function RequireAuth() {
   const auth = useAuth();
@@ -85,13 +88,16 @@ export default function App() {
               <Route path="/certificate/:trailId/:courseId" element={<Certificate />} />
               <Route path="/modulo/:id" element={<Module />} />
               <Route path="/ranking" element={<Ranking />} />
+              <Route path="/certificados" element={<MeusCertificadosPage />} />
               <Route path="/profile" element={<Profile />} />
               <Route element={<RequireManager />}>
                 <Route path="/manager" element={<Manager />} />
               </Route>
             </Route>
             <Route path="/modulo/:moduloId/aula/:aulaId" element={<VideoPlayer />} />
+            <Route path="/modulo/:moduloId/avaliacao" element={<AvaliacaoPage />} />
           </Route>
+          <Route path="/certificado/:codigo" element={<CertificadoPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

@@ -39,6 +39,12 @@ export const api = {
 
   excluirUsuario: (id) => request(`/usuarios/${id}`, { method: 'DELETE' }),
 
+  adicionarXP: (userId, ganho) =>
+    request(`/usuarios/${userId}/xp`, {
+      method: 'POST',
+      body: JSON.stringify({ ganho }),
+    }),
+
   // Trilhas
   getTrilhas: () => request('/trilhas'),
 
@@ -69,11 +75,19 @@ export const api = {
 
   getModuloById: (id) => request(`/modulos/${id}`),
 
-  criarModulo: (titulo, descricao, trilhaId) =>
+  criarModulo: (titulo, descricao, trilhaId, xpBonus) =>
     request('/modulos', {
       method: 'POST',
-      body: JSON.stringify({ titulo, descricao, trilhaId: trilhaId || null }),
+      body: JSON.stringify({ titulo, descricao, trilhaId: trilhaId || null, xpBonus: xpBonus ?? 50 }),
     }),
+
+  atualizarModulo: (id, titulo, descricao, trilhaId, xpBonus) =>
+    request(`/modulos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ titulo, descricao, trilhaId: trilhaId || null, xpBonus: xpBonus ?? 50 }),
+    }),
+
+  excluirModulo: (id) => request(`/modulos/${id}`, { method: 'DELETE' }),
 
   // Seções
   getSecoes: (moduloId) => request(`/secoes?moduloId=${moduloId}`),
@@ -103,10 +117,94 @@ export const api = {
 
   excluirAula: (id) => request(`/aulas/${id}`, { method: 'DELETE' }),
 
+  // Apostila (upload multipart)
+  uploadApostila: (aulaId, file) => {
+    const token = localStorage.getItem('ga_token');
+    const formData = new FormData();
+    formData.append('arquivo', file);
+    return fetch(`${BASE_URL}/aulas/${aulaId}/apostila`, {
+      method: 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: formData,
+    }).then(async res => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.erro || `Erro ${res.status}`);
+      }
+      return res.json();
+    });
+  },
+
   // Progresso
-  saveProgress: (lessonId) =>
+  saveProgress: (usuarioId, aulaId) =>
     request('/progresso', {
       method: 'POST',
-      body: JSON.stringify({ lessonId }),
+      body: JSON.stringify({ usuarioId, aulaId, concluida: true }),
     }),
+
+  getProgresso: (usuarioId) => request(`/progresso?usuarioId=${usuarioId}`),
+
+  getProgressoResumo: (usuarioId) => request(`/progresso/resumo?usuarioId=${usuarioId}`),
+
+  // Certificados
+  getMeusCertificados: (usuarioId) =>
+    request(`/certificados?usuarioId=${usuarioId}`),
+
+  gerarCertificado: (usuarioId, moduloId, avaliacaoId, nota) =>
+    request('/certificados', {
+      method: 'POST',
+      body: JSON.stringify({ usuarioId, moduloId, avaliacaoId, nota }),
+    }),
+
+  getCertificado: (codigo) =>
+    fetch(`${BASE_URL}/certificados/${codigo}`, {
+      headers: { 'Content-Type': 'application/json' },
+    }).then(async res => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.erro || `Erro ${res.status}`);
+      }
+      return res.json();
+    }),
+
+  // Avaliações
+  getAvaliacoes: (moduloId) =>
+    request(moduloId ? `/avaliacoes?moduloId=${moduloId}` : '/avaliacoes'),
+
+  getAvaliacaoById: (id) => request(`/avaliacoes/${id}`),
+
+  criarAvaliacao: (titulo, moduloId, notaMinima, tentativas, xpBonus) =>
+    request('/avaliacoes', {
+      method: 'POST',
+      body: JSON.stringify({ titulo, moduloId: moduloId || null, notaMinima, tentativas, xpBonus }),
+    }),
+
+  atualizarAvaliacao: (id, data) =>
+    request(`/avaliacoes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  excluirAvaliacao: (id) => request(`/avaliacoes/${id}`, { method: 'DELETE' }),
+
+  submeterAvaliacao: (id, respostas) =>
+    request(`/avaliacoes/${id}/submeter`, {
+      method: 'POST',
+      body: JSON.stringify({ respostas }),
+    }),
+
+  // Questões
+  criarQuestao: (data) =>
+    request('/questoes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  atualizarQuestao: (id, data) =>
+    request(`/questoes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  excluirQuestao: (id) => request(`/questoes/${id}`, { method: 'DELETE' }),
 };

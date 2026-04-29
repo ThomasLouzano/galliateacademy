@@ -5,6 +5,7 @@ import { getTrilha, trailProgress, courseProgress } from '../data/lmsData';
 import { api } from '../api/index.js';
 import ProgressBar from '../components/ProgressBar';
 
+
 export default function Trail() {
   const { trailId } = useParams();
   const navigate = useNavigate();
@@ -17,7 +18,9 @@ export default function Trail() {
 
   // Para IDs numéricos (backend), busca via API
   const isNumeric = /^\d+$/.test(String(trailId));
+  const { user } = useAuth();
   const [backendTrail, setBackendTrail] = useState(null);
+  const [porModulo, setPorModulo] = useState({});
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState(null);
 
@@ -33,14 +36,18 @@ export default function Trail() {
     console.log('[Trail] buscando trilha do backend, id:', trailId);
     setLoading(true);
     setErro(null);
-    api.getTrilhaById(trailId)
-      .then(data => {
-        console.log('[Trail] trilha do backend:', data);
-        setBackendTrail(data);
-      })
-      .catch(e => {
-        console.error('[Trail] erro ao buscar trilha:', e);
-        setErro(e.message || 'Erro ao carregar trilha');
+    const fetches = [api.getTrilhaById(trailId)];
+    if (user?.id) fetches.push(api.getProgressoResumo(user.id));
+    Promise.allSettled(fetches)
+      .then(([resTrilha, resProgresso]) => {
+        if (resTrilha.status !== 'fulfilled') {
+          setErro(resTrilha.reason?.message || 'Erro ao carregar trilha');
+          return;
+        }
+        setBackendTrail(resTrilha.value);
+        if (resProgresso?.status === 'fulfilled') {
+          setPorModulo(resProgresso.value.porModulo || {});
+        }
       })
       .finally(() => setLoading(false));
   }, [trailId]);
@@ -114,37 +121,56 @@ export default function Trail() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
-            {modulos.map((m, idx) => (
-              <div
-                key={m.id}
-                onClick={() => navigate(`/modulo/${m.id}`)}
-                style={{
-                  background: '#161616', border: '1px solid #1E1E1E',
-                  borderRadius: 12, padding: 22, cursor: 'pointer', transition: 'all .2s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#F9A80055'; e.currentTarget.style.background = '#1A1A1A'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#1E1E1E'; e.currentTarget.style.background = '#161616'; }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div style={{
-                    width: 34, height: 34, borderRadius: 8,
-                    background: '#F9A80022', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 900, fontSize: 16, color: '#F9A800',
-                  }}>{idx + 1}</div>
-                  {m.ativo === false && (
-                    <span style={{ fontSize: 10, background: '#E05A2B22', color: '#E05A2B', border: '1px solid #E05A2B44', borderRadius: 10, padding: '2px 8px', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800 }}>
-                      INATIVO
-                    </span>
+            {modulos.map((m, idx) => {
+              const prog = porModulo[m.id];
+              const pct = prog?.total > 0 ? Math.round((prog.concluidas / prog.total) * 100) : 0;
+              const done = pct === 100 && prog?.total > 0;
+              return (
+                <div
+                  key={m.id}
+                  onClick={() => navigate(`/modulo/${m.id}`)}
+                  style={{
+                    background: '#161616', border: `1px solid ${done ? '#22A06B44' : '#1E1E1E'}`,
+                    borderRadius: 12, padding: 22, cursor: 'pointer', transition: 'all .2s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = done ? '#22A06B66' : '#F9A80055'; e.currentTarget.style.background = '#1A1A1A'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = done ? '#22A06B44' : '#1E1E1E'; e.currentTarget.style.background = '#161616'; }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: 8,
+                      background: done ? '#22A06B22' : '#F9A80022',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 900, fontSize: 16,
+                      color: done ? '#22A06B' : '#F9A800',
+                    }}>{done ? '✓' : idx + 1}</div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {m.ativo === false && (
+                        <span style={{ fontSize: 10, background: '#E05A2B22', color: '#E05A2B', border: '1px solid #E05A2B44', borderRadius: 10, padding: '2px 8px', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800 }}>INATIVO</span>
+                      )}
+                      {m.xpBonus > 0 && (
+                        <span style={{ fontSize: 11, color: '#F9A80066', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800 }}>⚡{m.xpBonus} XP</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 20, fontWeight: 900, color: '#F0F0F0', marginBottom: 4, lineHeight: 1.2 }}>
+                    {m.titulo}
+                  </div>
+                  {m.descricao && (
+                    <div style={{ fontSize: 12, color: '#555', lineHeight: 1.5, marginBottom: prog ? 12 : 0 }}>{m.descricao}</div>
+                  )}
+                  {prog && prog.total > 0 && (
+                    <div style={{ marginTop: m.descricao ? 0 : 12 }}>
+                      <ProgressBar pct={pct} color={done ? '#22A06B' : '#F9A800'} h={4} />
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, fontSize: 11 }}>
+                        <span style={{ color: '#444' }}>{prog.concluidas}/{prog.total} aulas</span>
+                        <span style={{ color: done ? '#22A06B' : '#F9A800', fontWeight: 700 }}>{pct}%</span>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 20, fontWeight: 900, color: '#F0F0F0', marginBottom: 4, lineHeight: 1.2 }}>
-                  {m.titulo}
-                </div>
-                {m.descricao && (
-                  <div style={{ fontSize: 12, color: '#555', lineHeight: 1.5 }}>{m.descricao}</div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

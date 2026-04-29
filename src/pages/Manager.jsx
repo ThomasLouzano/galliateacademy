@@ -2,6 +2,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { TRILHAS } from '../data/lmsData';
 import { api } from '../api/index.js';
 import ProgressBar from '../components/ProgressBar';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ── YouTube duration helpers ───────────────────────────
 const YT_API_KEY = 'AIzaSyCajnB6iYCaRfturMVKGzgs6vgz9cVrzlk';
@@ -613,6 +627,13 @@ function SecaoModulos({ toast }) {
   const [trilhas, setTrilhas] = useState([]);
   const [saving, setSaving] = useState(false);
   const [moduloAtivo, setModuloAtivo] = useState(null);
+  const [xpBonus, setXpBonus] = useState(50);
+  const [moduloEditando, setModuloEditando] = useState(null);
+  const [editTitulo, setEditTitulo] = useState('');
+  const [editDescricao, setEditDescricao] = useState('');
+  const [editTrilhaId, setEditTrilhaId] = useState('');
+  const [editXpBonus, setEditXpBonus] = useState(50);
+  const [salvandoEdit, setSalvandoEdit] = useState(false);
 
   const carregar = useCallback(async () => {
     setLoadingList(true);
@@ -633,14 +654,39 @@ function SecaoModulos({ toast }) {
     if (!titulo.trim()) { toast('Título é obrigatório', false); return; }
     setSaving(true);
     try {
-      await api.criarModulo(titulo.trim(), descricao.trim(), trilhaId ? Number(trilhaId) : null);
+      await api.criarModulo(titulo.trim(), descricao.trim(), trilhaId ? Number(trilhaId) : null, Number(xpBonus) || 50);
       toast('Módulo criado com sucesso!', true);
-      setTitulo(''); setDescricao(''); setTrilhaId('');
+      setTitulo(''); setDescricao(''); setTrilhaId(''); setXpBonus(50);
       carregar();
     } catch (e) {
       toast(e.message || 'Erro ao criar módulo', false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const abrirModalEdicao = (m) => {
+    setModuloEditando(m);
+    setEditTitulo(m.titulo);
+    setEditDescricao(m.descricao || '');
+    setEditTrilhaId(m.trilhaId ? String(m.trilhaId) : '');
+    setEditXpBonus(m.xpBonus ?? 50);
+  };
+
+  const fecharModal = () => setModuloEditando(null);
+
+  const handleSalvarEdicaoModulo = async () => {
+    if (!editTitulo.trim()) { toast('Título é obrigatório', false); return; }
+    setSalvandoEdit(true);
+    try {
+      await api.atualizarModulo(moduloEditando.id, editTitulo.trim(), editDescricao.trim(), editTrilhaId ? Number(editTrilhaId) : null, Number(editXpBonus) || 50);
+      toast('Módulo atualizado com sucesso!', true);
+      fecharModal();
+      carregar();
+    } catch (e) {
+      toast(e.message || 'Erro ao atualizar módulo', false);
+    } finally {
+      setSalvandoEdit(false);
     }
   };
 
@@ -684,6 +730,14 @@ function SecaoModulos({ toast }) {
               <option key={t.id} value={t.id}>{t.icone} {t.nome}</option>
             ))}
           </Select>
+          <Input
+            label="XP do módulo (bônus ao completar todas as aulas)"
+            type="number"
+            value={xpBonus}
+            onChange={e => setXpBonus(e.target.value)}
+            placeholder="50"
+            style={{ width: 120 }}
+          />
           <Btn onClick={handleCriar} loading={saving} style={{ alignSelf: 'flex-start' }}>
             + CRIAR MÓDULO
           </Btn>
@@ -734,31 +788,174 @@ function SecaoModulos({ toast }) {
                     </span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
                   {m.criadoEm && (
                     <div style={{ fontSize: 10, color: '#2A2A2A' }}>
                       Criado em {new Date(m.criadoEm).toLocaleDateString('pt-BR')}
                     </div>
                   )}
-                  <button
-                    onClick={() => setModuloAtivo(m)}
-                    style={{
-                      marginLeft: 'auto', padding: '5px 14px', borderRadius: 6,
-                      border: '1px solid #F9A80033', background: '#F9A80010',
-                      color: '#F9A800', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif',
-                      fontSize: 12, fontWeight: 800, letterSpacing: 0.5, transition: 'all .15s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#F9A80022'; e.currentTarget.style.borderColor = '#F9A80066'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = '#F9A80010'; e.currentTarget.style.borderColor = '#F9A80033'; }}
-                  >
-                    ✎ EDITAR CONTEÚDO
-                  </button>
+                  <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+                    <button
+                      onClick={() => abrirModalEdicao(m)}
+                      style={{
+                        padding: '5px 12px', borderRadius: 6,
+                        border: '1px solid #FFC10733', background: '#FFC10710',
+                        color: '#FFC107', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif',
+                        fontSize: 12, fontWeight: 800, letterSpacing: 0.5, transition: 'all .15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#FFC10722'; e.currentTarget.style.borderColor = '#FFC10766'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#FFC10710'; e.currentTarget.style.borderColor = '#FFC10733'; }}
+                    >
+                      ✏️ EDITAR
+                    </button>
+                    <button
+                      onClick={() => setModuloAtivo(m)}
+                      style={{
+                        padding: '5px 14px', borderRadius: 6,
+                        border: '1px solid #F9A80033', background: '#F9A80010',
+                        color: '#F9A800', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif',
+                        fontSize: 12, fontWeight: 800, letterSpacing: 0.5, transition: 'all .15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#F9A80022'; e.currentTarget.style.borderColor = '#F9A80066'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#F9A80010'; e.currentTarget.style.borderColor = '#F9A80033'; }}
+                    >
+                      ✎ EDITAR CONTEÚDO
+                    </button>
+                    <Btn
+                      variant="danger"
+                      style={{ fontSize: 12, padding: '5px 12px' }}
+                      onClick={async () => {
+                        if (!window.confirm(`Excluir o módulo "${m.titulo}"? Esta ação também remove todas as seções e aulas vinculadas.`)) return;
+                        try {
+                          await api.excluirModulo(m.id);
+                          toast(`Módulo "${m.titulo}" excluído`, true);
+                          carregar();
+                        } catch (e) {
+                          toast(e.message || 'Erro ao excluir módulo', false);
+                        }
+                      }}
+                    >
+                      🗑 EXCLUIR
+                    </Btn>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* ── Modal de edição de módulo ── */}
+      {moduloEditando && (
+        <div
+          onClick={fecharModal}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#111', border: '1px solid #FFC10733',
+              borderRadius: 14, padding: '28px 32px', width: '100%', maxWidth: 480,
+              boxShadow: '0 24px 80px rgba(0,0,0,.8)',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+              <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 20, fontWeight: 900, color: '#FFC107', letterSpacing: 1 }}>
+                EDITAR MÓDULO
+              </div>
+              <button
+                onClick={fecharModal}
+                style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 4, transition: 'color .15s' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#FFC107'}
+                onMouseLeave={e => e.currentTarget.style.color = '#444'}
+              >✕</button>
+            </div>
+
+            {/* Campos */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#FFC107', letterSpacing: 1.5, fontFamily: 'Barlow Condensed, sans-serif' }}>TÍTULO *</span>
+                <input
+                  value={editTitulo}
+                  onChange={e => setEditTitulo(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSalvarEdicaoModulo()}
+                  autoFocus
+                  style={{ padding: '11px 14px', background: '#0D0D0D', border: '1px solid #FFC10733', borderRadius: 8, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#555', letterSpacing: 1.5, fontFamily: 'Barlow Condensed, sans-serif' }}>DESCRIÇÃO</span>
+                <textarea
+                  value={editDescricao}
+                  onChange={e => setEditDescricao(e.target.value)}
+                  rows={3}
+                  placeholder="Descreva o conteúdo do módulo..."
+                  style={{ padding: '10px 14px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 8, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.6 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#555', letterSpacing: 1.5, fontFamily: 'Barlow Condensed, sans-serif' }}>TRILHA</span>
+                <select
+                  value={editTrilhaId}
+                  onChange={e => setEditTrilhaId(e.target.value)}
+                  style={{ padding: '11px 14px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 8, color: editTrilhaId ? '#F0F0F0' : '#555', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
+                >
+                  <option value="">— Sem trilha —</option>
+                  {trilhas.map(t => (
+                    <option key={t.id} value={t.id}>{t.icone} {t.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#555', letterSpacing: 1.5, fontFamily: 'Barlow Condensed, sans-serif' }}>XP DO MÓDULO (bônus ao completar)</span>
+                <input
+                  type="number"
+                  value={editXpBonus}
+                  onChange={e => setEditXpBonus(e.target.value)}
+                  placeholder="50"
+                  style={{ padding: '11px 14px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 8, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 14, outline: 'none', width: 120, boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Botões */}
+              <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                <button
+                  onClick={handleSalvarEdicaoModulo}
+                  disabled={salvandoEdit}
+                  style={{
+                    flex: 1, padding: '12px', background: salvandoEdit ? '#555' : '#FFC107',
+                    border: 'none', borderRadius: 8, color: '#000',
+                    fontFamily: 'Barlow Condensed, sans-serif', fontSize: 15, fontWeight: 900,
+                    cursor: salvandoEdit ? 'not-allowed' : 'pointer', letterSpacing: 0.5,
+                    transition: 'background .15s',
+                  }}
+                  onMouseEnter={e => { if (!salvandoEdit) e.currentTarget.style.background = '#FFD54F'; }}
+                  onMouseLeave={e => { if (!salvandoEdit) e.currentTarget.style.background = '#FFC107'; }}
+                >
+                  {salvandoEdit ? 'SALVANDO...' : 'SALVAR'}
+                </button>
+                <button
+                  onClick={fecharModal}
+                  style={{ padding: '12px 20px', background: 'transparent', border: '1px solid #2A2A2A', borderRadius: 8, color: '#666', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', transition: 'all .15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#999'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#666'; }}
+                >
+                  CANCELAR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -776,7 +973,11 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
   const [checklistItems, setChecklistItems] = useState([]);
   const [novoItem, setNovoItem] = useState('');
   const [saving, setSaving] = useState(false);
+  const [xp, setXp] = useState(10);
   const [fetchingDuracao, setFetchingDuracao] = useState(false);
+  const [apostilaTipo, setApostilaTipo] = useState('url');
+  const [apostilaUrl, setApostilaUrl] = useState('');
+  const [apostilaFile, setApostilaFile] = useState(null);
 
   const handleVideoUrlBlur = async (url) => {
     if (!extractYouTubeId(url)) return;
@@ -799,7 +1000,7 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
     if (!titulo.trim()) { toast('Título da aula é obrigatório', false); return; }
     setSaving(true);
     try {
-      await api.criarAula({
+      const resp = await api.criarAula({
         titulo: titulo.trim(),
         descricao: descricao.trim() || null,
         videoUrl: videoUrl.trim() || null,
@@ -807,7 +1008,12 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
         ordem: Number(ordem) || 0,
         secaoId,
         checklist: checklistItems.length ? JSON.stringify(checklistItems) : null,
+        apostilaUrl: apostilaTipo === 'url' ? apostilaUrl.trim() || null : null,
+        xp: Number(xp) || 10,
       });
+      if (apostilaTipo === 'upload' && apostilaFile && resp.aula?.id) {
+        await api.uploadApostila(resp.aula.id, apostilaFile);
+      }
       toast('Aula criada com sucesso!', true);
       onSaved();
     } catch (e) {
@@ -824,7 +1030,7 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Input label="Título *" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Introdução ao módulo" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
           <Input
             label={fetchingDuracao ? 'Duração (buscando...)' : 'Duração'}
             value={duracao}
@@ -833,6 +1039,7 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
             disabled={fetchingDuracao}
           />
           <Input label="Ordem" type="number" value={ordem} onChange={e => setOrdem(e.target.value)} placeholder="0" />
+          <Input label="XP da aula" type="number" value={xp} onChange={e => setXp(e.target.value)} placeholder="10" />
         </div>
         <Input
           label="Link do vídeo (YouTube / Vimeo)"
@@ -883,6 +1090,26 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
           )}
         </div>
 
+        {/* Apostila */}
+        <div>
+          <div style={{ fontSize: 11, color: '#555', fontWeight: 600, marginBottom: 6 }}>Apostila</div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            {[['url', '🔗 Link externo'], ['upload', '📁 Upload']].map(([val, lbl]) => (
+              <button key={val} onClick={() => setApostilaTipo(val)} style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, background: apostilaTipo === val ? '#F9A80022' : 'transparent', border: `1px solid ${apostilaTipo === val ? '#F9A80055' : '#2A2A2A'}`, color: apostilaTipo === val ? '#F9A800' : '#444' }}>{lbl}</button>
+            ))}
+          </div>
+          {apostilaTipo === 'url' ? (
+            <input value={apostilaUrl} onChange={e => setApostilaUrl(e.target.value)} placeholder="https://drive.google.com/... ou link direto para PDF" style={{ padding: '10px 14px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 8, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+          ) : (
+            <div>
+              <input type="file" accept=".pdf,.docx,.doc" id="apostila-new" onChange={e => setApostilaFile(e.target.files[0] || null)} style={{ display: 'none' }} />
+              <label htmlFor="apostila-new" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', background: '#0D0D0D', border: '1px dashed #2A2A2A', borderRadius: 8, cursor: 'pointer', fontSize: 12, color: apostilaFile ? '#F9A800' : '#555', fontFamily: 'Barlow, sans-serif' }}>
+                📎 {apostilaFile ? apostilaFile.name : 'Selecionar PDF ou Word (.docx)...'}
+              </label>
+            </div>
+          )}
+        </div>
+
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <Btn onClick={handleSave} loading={saving}>SALVAR AULA</Btn>
           <Btn variant="ghost" onClick={onCancel}>CANCELAR</Btn>
@@ -892,7 +1119,7 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
   );
 }
 
-function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
+function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}, dragHandleAttributes = {}, isDragging = false }) {
   const [aula, setAula] = useState(aulaInicial);
   const [expanded, setExpanded] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
@@ -902,7 +1129,11 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
   const [editVideoUrl, setEditVideoUrl] = useState('');
   const [editDuracao, setEditDuracao] = useState('');
   const [salvandoEdit, setSalvandoEdit] = useState(false);
+  const [editXp, setEditXp] = useState(aulaInicial.xp ?? 10);
   const [fetchingEditDuracao, setFetchingEditDuracao] = useState(false);
+  const [editApostilaTipo, setEditApostilaTipo] = useState('url');
+  const [editApostilaUrl, setEditApostilaUrl] = useState('');
+  const [editApostilaFile, setEditApostilaFile] = useState(null);
 
   const handleEditVideoUrlBlur = async (url) => {
     if (!extractYouTubeId(url)) return;
@@ -923,6 +1154,10 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
     setEditDescricao(aula.descricao || '');
     setEditVideoUrl(aula.videoUrl || '');
     setEditDuracao(aula.duracao || '');
+    setEditApostilaUrl(aula.apostilaUrl || '');
+    setEditApostilaTipo('url');
+    setEditApostilaFile(null);
+    setEditXp(aula.xp ?? 10);
     setEditando(true);
     setExpanded(false);
   };
@@ -933,13 +1168,20 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
     if (!editTitulo.trim()) { toast('Título é obrigatório', false); return; }
     setSalvandoEdit(true);
     try {
+      let apostilaUrl = editApostilaTipo === 'url' ? editApostilaUrl.trim() || null : aula.apostilaUrl;
+      if (editApostilaTipo === 'upload' && editApostilaFile) {
+        const up = await api.uploadApostila(aula.id, editApostilaFile);
+        apostilaUrl = up.apostilaUrl;
+      }
       const resp = await api.atualizarAula(aula.id, {
         titulo: editTitulo.trim(),
         descricao: editDescricao.trim() || null,
         videoUrl: editVideoUrl.trim() || null,
         duracao: editDuracao.trim() || null,
+        apostilaUrl,
+        xp: Number(editXp) || 10,
       });
-      setAula(resp.aula ?? { ...aula, titulo: editTitulo.trim(), descricao: editDescricao.trim() || null, videoUrl: editVideoUrl.trim() || null, duracao: editDuracao.trim() || null });
+      setAula(resp.aula ?? { ...aula, titulo: editTitulo.trim(), descricao: editDescricao.trim() || null, videoUrl: editVideoUrl.trim() || null, duracao: editDuracao.trim() || null, apostilaUrl, xp: Number(editXp) || 10 });
       toast('Aula atualizada com sucesso!', true);
       setEditando(false);
     } catch (e) {
@@ -963,16 +1205,29 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
   };
 
   return (
-    <div style={{ background: '#0A0A0A', border: `1px solid ${editando ? '#FFC10744' : '#1E1E1E'}`, borderRadius: 8, overflow: 'hidden', transition: 'border-color .15s' }}>
+    <div style={{ background: '#0A0A0A', border: `1px solid ${isDragging ? '#FFC10766' : editando ? '#FFC10744' : '#1E1E1E'}`, borderRadius: 8, overflow: 'hidden', transition: 'border-color .15s', opacity: isDragging ? 0.5 : 1 }}>
       {/* Linha de cabeçalho */}
       <div
         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: editando ? 'default' : 'pointer', userSelect: 'none' }}
         onClick={() => !editando && setExpanded(e => !e)}
       >
+        {/* Drag handle */}
+        <span
+          {...dragHandleListeners}
+          {...dragHandleAttributes}
+          onClick={e => e.stopPropagation()}
+          style={{ color: '#2A2A2A', fontSize: 16, cursor: 'grab', touchAction: 'none', flexShrink: 0, lineHeight: 1, padding: '0 2px', transition: 'color .15s' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#FFC107'}
+          onMouseLeave={e => e.currentTarget.style.color = '#2A2A2A'}
+          title="Arrastar para reordenar"
+        >⠿</span>
         <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 800, color: '#333', fontSize: 13, minWidth: 20 }}>#{aula.ordem ?? 0}</span>
         <span style={{ flex: 1, fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 700, color: editando ? '#FFC107' : '#CCC' }}>{aula.titulo}</span>
         {aula.duracao && !editando && (
           <span style={{ fontSize: 11, color: '#555', background: '#161616', borderRadius: 4, padding: '2px 7px' }}>⏱ {aula.duracao}</span>
+        )}
+        {!editando && (
+          <span style={{ fontSize: 10, color: '#F9A80088', background: '#F9A80011', borderRadius: 4, padding: '2px 7px' }}>⚡{aula.xp ?? 10} XP</span>
         )}
         {aula.videoUrl && !editando && <span style={{ fontSize: 11, color: '#8B7FE8' }}>▶</span>}
         {checklist.length > 0 && !editando && (
@@ -1019,7 +1274,7 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
                 style={{ padding: '9px 12px', background: '#111', border: '1px solid #FFC10733', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', gap: 10 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: fetchingEditDuracao ? '#FFC107' : '#555', letterSpacing: 1 }}>
                   {fetchingEditDuracao ? 'DURAÇÃO ⟳' : 'DURAÇÃO'}
@@ -1042,6 +1297,16 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
                   style={{ padding: '9px 12px', background: '#111', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>XP</span>
+                <input
+                  type="number"
+                  value={editXp}
+                  onChange={e => setEditXp(e.target.value)}
+                  placeholder="10"
+                  style={{ padding: '9px 12px', background: '#111', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>DESCRIÇÃO</span>
@@ -1053,6 +1318,29 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
                 style={{ padding: '9px 12px', background: '#111', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.6 }}
               />
             </div>
+            {/* Apostila */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>APOSTILA</span>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+                {[['url', '🔗 Link'], ['upload', '📁 Upload']].map(([val, lbl]) => (
+                  <button key={val} onClick={() => setEditApostilaTipo(val)} style={{ padding: '4px 10px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, background: editApostilaTipo === val ? '#FFC10720' : 'transparent', border: `1px solid ${editApostilaTipo === val ? '#FFC10744' : '#2A2A2A'}`, color: editApostilaTipo === val ? '#FFC107' : '#444' }}>{lbl}</button>
+                ))}
+              </div>
+              {editApostilaTipo === 'url' ? (
+                <input value={editApostilaUrl} onChange={e => setEditApostilaUrl(e.target.value)} placeholder="https://drive.google.com/... ou link direto para PDF" style={{ padding: '9px 12px', background: '#111', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+              ) : (
+                <div>
+                  <input type="file" accept=".pdf,.docx,.doc" id={`apostila-edit-${aula.id}`} onChange={e => setEditApostilaFile(e.target.files[0] || null)} style={{ display: 'none' }} />
+                  <label htmlFor={`apostila-edit-${aula.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#111', border: '1px dashed #2A2A2A', borderRadius: 7, cursor: 'pointer', fontSize: 12, color: editApostilaFile ? '#FFC107' : '#555', fontFamily: 'Barlow, sans-serif' }}>
+                    📎 {editApostilaFile ? editApostilaFile.name : 'Selecionar PDF ou Word...'}
+                  </label>
+                </div>
+              )}
+              {aula.apostilaUrl && !editApostilaFile && editApostilaTipo === 'url' && !editApostilaUrl && (
+                <span style={{ fontSize: 10, color: '#2A2A2A' }}>Atual: {aula.apostilaUrl.split('/').pop()}</span>
+              )}
+            </div>
+
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={handleSalvarEdicao}
@@ -1075,10 +1363,10 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
             <p style={{ fontSize: 12, color: '#555', lineHeight: 1.6, marginBottom: 10 }}>{aula.descricao}</p>
           )}
           {aula.videoUrl && (
-            <a
-              href={aula.videoUrl} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 12, color: '#8B7FE8', display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 10, textDecoration: 'none' }}
-            >▶ Ver vídeo</a>
+            <a href={aula.videoUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: '#8B7FE8', display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 10, textDecoration: 'none' }}>▶ Ver vídeo</a>
+          )}
+          {aula.apostilaUrl && (
+            <a href={aula.apostilaUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: '#F9A800', display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 10, textDecoration: 'none' }}>📄 Ver apostila</a>
           )}
           {checklist.length > 0 && (
             <div>
@@ -1098,16 +1386,60 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast }) {
   );
 }
 
+function SortableAulaRow({ aula, onDeleted, toast }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: aula.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : 'auto',
+        position: 'relative',
+      }}
+    >
+      <AulaRow
+        aula={aula}
+        onDeleted={onDeleted}
+        toast={toast}
+        dragHandleListeners={listeners}
+        dragHandleAttributes={attributes}
+        isDragging={isDragging}
+      />
+    </div>
+  );
+}
+
 function SecaoCard({ secao: secaoInicial, onDeleted, toast }) {
   const [aulas, setAulas] = useState(secaoInicial.aulas || []);
   const [showForm, setShowForm] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+  );
 
   const recarregarAulas = async () => {
     try {
       const data = await api.getAulas(secaoInicial.id);
       setAulas(Array.isArray(data) ? data : []);
     } catch {}
+  };
+
+  const handleDragEnd = async ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const oldIdx = aulas.findIndex(a => a.id === active.id);
+    const newIdx = aulas.findIndex(a => a.id === over.id);
+    const reordenadas = arrayMove(aulas, oldIdx, newIdx);
+    setAulas(reordenadas); // optimistic update
+    try {
+      await Promise.all(
+        reordenadas.map((a, idx) => api.atualizarAula(a.id, { ordem: idx }))
+      );
+    } catch {
+      toast('Erro ao salvar nova ordem', false);
+      recarregarAulas();
+    }
   };
 
   const handleDeleteSecao = async () => {
@@ -1138,11 +1470,15 @@ function SecaoCard({ secao: secaoInicial, onDeleted, toast }) {
       {aulas.length === 0 ? (
         <div style={{ fontSize: 12, color: '#2A2A2A', padding: '6px 0', marginBottom: 10 }}>Nenhuma aula nesta seção ainda.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-          {aulas.map(a => (
-            <AulaRow key={a.id} aula={a} onDeleted={recarregarAulas} toast={toast} />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={aulas.map(a => a.id)} strategy={verticalListSortingStrategy}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              {aulas.map(a => (
+                <SortableAulaRow key={a.id} aula={a} onDeleted={recarregarAulas} toast={toast} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {showForm ? (
@@ -1251,6 +1587,525 @@ function ModuloEditor({ modulo, onVoltar, toast }) {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// SEÇÃO: Avaliações
+// ═══════════════════════════════════════════════════════
+
+// ── QuestaoForm ─────────────────────────────────────────
+function QuestaoForm({ avaliacaoId, onSaved, onCancel, toast, questaoEditando = null }) {
+  const editando = !!questaoEditando;
+  const parseAlts = (q) => {
+    try { return q?.alternativas ? JSON.parse(q.alternativas) : ['', '', '', '']; }
+    catch { return ['', '', '', '']; }
+  };
+
+  const [enunciado, setEnunciado] = useState(questaoEditando?.enunciado || '');
+  const [tipo, setTipo] = useState(questaoEditando?.tipo || 'multipla');
+  const [alternativas, setAlternativas] = useState(parseAlts(questaoEditando));
+  const [respostaCorreta, setRespostaCorreta] = useState(questaoEditando?.respostaCorreta || '0');
+  const [peso, setPeso] = useState(questaoEditando?.peso ?? 1);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!enunciado.trim()) { toast('Enunciado é obrigatório', false); return; }
+    if (tipo === 'multipla' && alternativas.some(a => !a.trim())) {
+      toast('Preencha todas as 4 alternativas', false); return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        enunciado: enunciado.trim(),
+        tipo,
+        alternativas: tipo === 'multipla' ? alternativas.map(a => a.trim()) : null,
+        respostaCorreta,
+        peso: Number(peso) || 1,
+        avaliacaoId,
+      };
+      if (editando) {
+        await api.atualizarQuestao(questaoEditando.id, payload);
+        toast('Questão atualizada!', true);
+      } else {
+        await api.criarQuestao(payload);
+        toast('Questão criada!', true);
+      }
+      onSaved();
+    } catch (e) {
+      toast(e.message || 'Erro ao salvar questão', false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setAlt = (i, v) => setAlternativas(p => p.map((a, j) => j === i ? v : a));
+  const LETRAS = ['A', 'B', 'C', 'D'];
+
+  return (
+    <div style={{ background: '#0D0D0D', border: '1px solid #FFC10733', borderRadius: 10, padding: '16px 18px', marginTop: 8 }}>
+      <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 800, color: '#FFC107', marginBottom: 12 }}>
+        {editando ? 'EDITAR QUESTÃO' : 'NOVA QUESTÃO'}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Enunciado */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>ENUNCIADO *</span>
+          <textarea
+            value={enunciado}
+            onChange={e => setEnunciado(e.target.value)}
+            rows={2}
+            placeholder="Ex: Qual a temperatura correta para grelhar um smashburger?"
+            style={{ padding: '9px 12px', background: '#111', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.5 }}
+          />
+        </div>
+
+        {/* Tipo + Peso */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>TIPO</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[['multipla', '☰ Múltipla escolha'], ['vf', '○ Verdadeiro/Falso']].map(([val, lbl]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => { setTipo(val); setRespostaCorreta(val === 'vf' ? 'true' : '0'); }}
+                  style={{
+                    padding: '6px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                    fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700,
+                    background: tipo === val ? '#FFC10720' : 'transparent',
+                    border: `1px solid ${tipo === val ? '#FFC10755' : '#2A2A2A'}`,
+                    color: tipo === val ? '#FFC107' : '#444',
+                  }}
+                >{lbl}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 80 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>PESO</span>
+            <input
+              type="number"
+              value={peso}
+              onChange={e => setPeso(e.target.value)}
+              min={1}
+              style={{ padding: '8px 10px', background: '#111', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+        </div>
+
+        {/* Alternativas */}
+        {tipo === 'multipla' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>ALTERNATIVAS (marque a correta)</span>
+            {alternativas.map((alt, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setRespostaCorreta(String(i))}
+                  style={{
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${respostaCorreta === String(i) ? '#FFC107' : '#2A2A2A'}`,
+                    background: respostaCorreta === String(i) ? '#FFC107' : 'transparent',
+                    color: respostaCorreta === String(i) ? '#000' : '#444',
+                    fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 900, fontSize: 12,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                  title={`Marcar ${LETRAS[i]} como correta`}
+                >{LETRAS[i]}</button>
+                <input
+                  value={alt}
+                  onChange={e => setAlt(i, e.target.value)}
+                  placeholder={`Alternativa ${LETRAS[i]}`}
+                  style={{
+                    flex: 1, padding: '8px 12px',
+                    background: respostaCorreta === String(i) ? '#FFC10710' : '#111',
+                    border: `1px solid ${respostaCorreta === String(i) ? '#FFC10744' : '#2A2A2A'}`,
+                    borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif',
+                    fontSize: 13, outline: 'none', transition: 'all .15s',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>RESPOSTA CORRETA</span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[['true', '✓ VERDADEIRO'], ['false', '✗ FALSO']].map(([val, lbl]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setRespostaCorreta(val)}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
+                    fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 900,
+                    background: respostaCorreta === val ? (val === 'true' ? '#22A06B22' : '#E05A2B22') : 'transparent',
+                    border: `1px solid ${respostaCorreta === val ? (val === 'true' ? '#22A06B66' : '#E05A2B66') : '#2A2A2A'}`,
+                    color: respostaCorreta === val ? (val === 'true' ? '#22A06B' : '#E05A2B') : '#444',
+                    transition: 'all .15s',
+                  }}
+                >{lbl}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '9px 20px', background: saving ? '#555' : '#FFC107', border: 'none', borderRadius: 7, color: '#000', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 900, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? 'SALVANDO...' : 'SALVAR'}
+          </button>
+          <button onClick={onCancel} style={{ padding: '9px 16px', background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 7, color: '#888', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            CANCELAR
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── QuestaoCard ──────────────────────────────────────────
+function QuestaoCard({ questao, onDeleted, onEdited, toast }) {
+  const [editando, setEditando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+
+  const alts = (() => { try { return questao.alternativas ? JSON.parse(questao.alternativas) : []; } catch { return []; } })();
+  const LETRAS = ['A', 'B', 'C', 'D'];
+
+  const handleExcluir = async () => {
+    if (!window.confirm('Excluir esta questão?')) return;
+    setExcluindo(true);
+    try {
+      await api.excluirQuestao(questao.id);
+      toast('Questão excluída', true);
+      onDeleted();
+    } catch (e) {
+      toast(e.message || 'Erro ao excluir questão', false);
+      setExcluindo(false);
+    }
+  };
+
+  if (editando) {
+    return (
+      <QuestaoForm
+        avaliacaoId={questao.avaliacaoId}
+        questaoEditando={questao}
+        onSaved={() => { setEditando(false); onEdited(); }}
+        onCancel={() => setEditando(false)}
+        toast={toast}
+      />
+    );
+  }
+
+  const respostaLabel = questao.tipo === 'vf'
+    ? (questao.respostaCorreta === 'true' ? '✓ Verdadeiro' : '✗ Falso')
+    : `${LETRAS[Number(questao.respostaCorreta)] || '?'}: ${alts[Number(questao.respostaCorreta)] || ''}`;
+
+  return (
+    <div style={{ background: '#111', border: '1px solid #1E1E1E', borderRadius: 8, padding: '12px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: '#CCC', lineHeight: 1.5, marginBottom: 6 }}>{questao.enunciado}</div>
+          {questao.tipo === 'multipla' && alts.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 6 }}>
+              {alts.map((a, i) => (
+                <div key={i} style={{ fontSize: 11, display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    background: String(i) === String(questao.respostaCorreta) ? '#FFC107' : '#1A1A1A',
+                    border: `1px solid ${String(i) === String(questao.respostaCorreta) ? '#FFC107' : '#2A2A2A'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'Barlow Condensed', fontWeight: 900, fontSize: 9,
+                    color: String(i) === String(questao.respostaCorreta) ? '#000' : '#444',
+                  }}>{LETRAS[i]}</span>
+                  <span style={{ color: String(i) === String(questao.respostaCorreta) ? '#FFC107' : '#555' }}>{a}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, background: '#FFC10715', border: '1px solid #FFC10733', borderRadius: 4, padding: '2px 7px', color: '#FFC107', fontFamily: 'Barlow Condensed', fontWeight: 800 }}>
+              {questao.tipo === 'vf' ? 'V/F' : 'MC'}
+            </span>
+            <span style={{ fontSize: 10, color: '#22A06B', background: '#22A06B15', border: '1px solid #22A06B33', borderRadius: 4, padding: '2px 7px', fontFamily: 'Barlow Condensed', fontWeight: 800 }}>
+              ✓ {respostaLabel}
+            </span>
+            <span style={{ fontSize: 10, color: '#555' }}>peso {questao.peso}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <button onClick={() => setEditando(true)} style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 13, padding: '2px 5px' }} onMouseEnter={e => e.currentTarget.style.color = '#FFC107'} onMouseLeave={e => e.currentTarget.style.color = '#444'}>✏️</button>
+          <button onClick={handleExcluir} disabled={excluindo} style={{ background: 'none', border: 'none', color: '#444', cursor: excluindo ? 'not-allowed' : 'pointer', fontSize: 13, padding: '2px 5px' }} onMouseEnter={e => { if (!excluindo) e.currentTarget.style.color = '#E05A2B'; }} onMouseLeave={e => e.currentTarget.style.color = '#444'}>{excluindo ? '...' : '🗑'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── AvaliacaoCard ────────────────────────────────────────
+function AvaliacaoCard({ avaliacao: av, modulos, onDeleted, toast }) {
+  const [expandida, setExpandida] = useState(false);
+  const [questoes, setQuestoes] = useState(av.questoes || []);
+  const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [editTitulo, setEditTitulo] = useState(av.titulo);
+  const [editModuloId, setEditModuloId] = useState(av.moduloId ? String(av.moduloId) : '');
+  const [editNotaMinima, setEditNotaMinima] = useState(av.notaMinima);
+  const [editTentativas, setEditTentativas] = useState(av.tentativas);
+  const [editXpBonus, setEditXpBonus] = useState(av.xpBonus ?? 100);
+  const [salvando, setSalvando] = useState(false);
+
+  const moduloNome = modulos.find(m => m.id === av.moduloId)?.titulo;
+
+  const recarregarQuestoes = async () => {
+    try {
+      const av2 = await api.getAvaliacaoById(av.id);
+      setQuestoes(av2.questoes || []);
+    } catch {}
+  };
+
+  const handleSalvarEdicao = async () => {
+    if (!editTitulo.trim()) { toast('Título é obrigatório', false); return; }
+    setSalvando(true);
+    try {
+      await api.atualizarAvaliacao(av.id, {
+        titulo: editTitulo.trim(),
+        moduloId: editModuloId ? Number(editModuloId) : null,
+        notaMinima: Number(editNotaMinima),
+        tentativas: Number(editTentativas),
+        xpBonus: Number(editXpBonus),
+      });
+      toast('Avaliação atualizada!', true);
+      setEditando(false);
+      onDeleted(); // recarrega lista
+    } catch (e) {
+      toast(e.message || 'Erro ao atualizar avaliação', false);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const handleExcluir = async () => {
+    if (!window.confirm(`Excluir a avaliação "${av.titulo}" e todas as suas questões?`)) return;
+    try {
+      await api.excluirAvaliacao(av.id);
+      toast(`"${av.titulo}" excluída`, true);
+      onDeleted();
+    } catch (e) {
+      toast(e.message || 'Erro ao excluir avaliação', false);
+    }
+  };
+
+  return (
+    <div style={{ background: '#161616', border: '1px solid #1E1E1E', borderRadius: 10, overflow: 'hidden' }}>
+      {/* Cabeçalho */}
+      <div style={{ padding: '14px 16px' }}>
+        {editando ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#FFC107', letterSpacing: 1 }}>TÍTULO *</span>
+              <input value={editTitulo} onChange={e => setEditTitulo(e.target.value)} style={{ padding: '8px 12px', background: '#0D0D0D', border: '1px solid #FFC10733', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>MÓDULO</span>
+                <select value={editModuloId} onChange={e => setEditModuloId(e.target.value)} style={{ padding: '8px 10px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' }}>
+                  <option value="">— Nenhum —</option>
+                  {modulos.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>NOTA MÍN.</span>
+                <input type="number" value={editNotaMinima} onChange={e => setEditNotaMinima(e.target.value)} min={0} max={100} style={{ padding: '8px 10px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>TENTATIVAS</span>
+                <input type="number" value={editTentativas} onChange={e => setEditTentativas(e.target.value)} min={1} style={{ padding: '8px 10px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>XP BÔNUS</span>
+                <input type="number" value={editXpBonus} onChange={e => setEditXpBonus(e.target.value)} min={0} style={{ padding: '8px 10px', background: '#0D0D0D', border: '1px solid #2A2A2A', borderRadius: 7, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleSalvarEdicao} disabled={salvando} style={{ padding: '8px 18px', background: '#FFC107', border: 'none', borderRadius: 7, color: '#000', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 900, cursor: salvando ? 'not-allowed' : 'pointer', opacity: salvando ? 0.6 : 1 }}>{salvando ? 'SALVANDO...' : 'SALVAR'}</button>
+              <button onClick={() => setEditando(false)} style={{ padding: '8px 14px', background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 7, color: '#888', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>CANCELAR</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 16, fontWeight: 800, color: '#E0E0E0', marginBottom: 3 }}>{av.titulo}</div>
+                {moduloNome && (
+                  <div style={{ fontSize: 11, color: '#F9A80088' }}>📦 {moduloNome}</div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                <button onClick={() => setEditando(true)} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid #FFC10733', background: '#FFC10710', color: '#FFC107', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, fontWeight: 800 }} onMouseEnter={e => { e.currentTarget.style.background = '#FFC10722'; }} onMouseLeave={e => { e.currentTarget.style.background = '#FFC10710'; }}>✏️ EDITAR</button>
+                <button onClick={handleExcluir} style={{ padding: '4px 10px', borderRadius: 5, border: '1px solid #E05A2B44', background: '#E05A2B11', color: '#E05A2B', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, fontWeight: 800 }} onMouseEnter={e => { e.currentTarget.style.background = '#E05A2B22'; }} onMouseLeave={e => { e.currentTarget.style.background = '#E05A2B11'; }}>🗑</button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 10, background: '#22A06B15', border: '1px solid #22A06B33', borderRadius: 4, padding: '2px 8px', color: '#22A06B', fontFamily: 'Barlow Condensed', fontWeight: 800 }}>✓ mín. {av.notaMinima}%</span>
+              <span style={{ fontSize: 10, background: '#8B7FE815', border: '1px solid #8B7FE833', borderRadius: 4, padding: '2px 8px', color: '#8B7FE8', fontFamily: 'Barlow Condensed', fontWeight: 800 }}>↺ {av.tentativas} tentativas</span>
+              <span style={{ fontSize: 10, background: '#F9A80015', border: '1px solid #F9A80033', borderRadius: 4, padding: '2px 8px', color: '#F9A800', fontFamily: 'Barlow Condensed', fontWeight: 800 }}>⚡{av.xpBonus ?? 100} XP</span>
+              <span style={{ fontSize: 10, color: '#2A2A2A' }}>{questoes.length} questão{questoes.length !== 1 ? 'ões' : ''}</span>
+              <button
+                onClick={() => setExpandida(e => !e)}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 11, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
+                onMouseEnter={e => e.currentTarget.style.color = '#FFC107'}
+                onMouseLeave={e => e.currentTarget.style.color = '#555'}
+              >
+                {expandida ? '▴ OCULTAR' : '▾ QUESTÕES'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Questões */}
+      {expandida && !editando && (
+        <div style={{ borderTop: '1px solid #1A1A1A', padding: '12px 16px' }}>
+          {questoes.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#2A2A2A', marginBottom: 10 }}>Nenhuma questão cadastrada ainda.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+              {questoes.map(q => (
+                <QuestaoCard
+                  key={q.id}
+                  questao={q}
+                  onDeleted={recarregarQuestoes}
+                  onEdited={recarregarQuestoes}
+                  toast={toast}
+                />
+              ))}
+            </div>
+          )}
+          {showForm ? (
+            <QuestaoForm
+              avaliacaoId={av.id}
+              onSaved={() => { setShowForm(false); recarregarQuestoes(); }}
+              onCancel={() => setShowForm(false)}
+              toast={toast}
+            />
+          ) : (
+            <button
+              onClick={() => setShowForm(true)}
+              style={{ padding: '7px 14px', borderRadius: 7, border: '1px dashed #FFC10733', background: 'transparent', color: '#FFC10777', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 12, fontWeight: 700, transition: 'all .15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#FFC10766'; e.currentTarget.style.color = '#FFC107'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#FFC10733'; e.currentTarget.style.color = '#FFC10777'; }}
+            >＋ Adicionar Questão</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SecaoAvaliacoes ──────────────────────────────────────
+function SecaoAvaliacoes({ toast }) {
+  const [avaliacoes, setAvaliacoes] = useState([]);
+  const [modulos, setModulos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [titulo, setTitulo] = useState('');
+  const [moduloId, setModuloId] = useState('');
+  const [notaMinima, setNotaMinima] = useState(70);
+  const [tentativas, setTentativas] = useState(3);
+  const [xpBonus, setXpBonus] = useState(100);
+  const [saving, setSaving] = useState(false);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    // Carrega módulos e avaliações de forma independente para que a falha
+    // de um não impeça o outro de popular o estado (especialmente o dropdown).
+    const [resAvs, resMods] = await Promise.allSettled([
+      api.getAvaliacoes(),
+      api.getModulos(),
+    ]);
+
+    if (resAvs.status === 'fulfilled') {
+      console.log('[SecaoAvaliacoes] avaliações:', resAvs.value);
+      setAvaliacoes(Array.isArray(resAvs.value) ? resAvs.value : []);
+    } else {
+      console.error('[SecaoAvaliacoes] erro ao buscar avaliações:', resAvs.reason);
+      toast(resAvs.reason?.message || 'Erro ao carregar avaliações', false);
+    }
+
+    if (resMods.status === 'fulfilled') {
+      console.log('[SecaoAvaliacoes] módulos:', resMods.value);
+      setModulos(Array.isArray(resMods.value) ? resMods.value : []);
+    } else {
+      console.error('[SecaoAvaliacoes] erro ao buscar módulos:', resMods.reason);
+    }
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const handleCriar = async () => {
+    if (!titulo.trim()) { toast('Título é obrigatório', false); return; }
+    setSaving(true);
+    try {
+      await api.criarAvaliacao(titulo.trim(), moduloId ? Number(moduloId) : null, Number(notaMinima), Number(tentativas), Number(xpBonus));
+      toast('Avaliação criada com sucesso!', true);
+      setTitulo(''); setModuloId(''); setNotaMinima(70); setTentativas(3); setXpBonus(100);
+      carregar();
+    } catch (e) {
+      toast(e.message || 'Erro ao criar avaliação', false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid-2">
+      {/* Formulário */}
+      <Card>
+        <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 18, fontWeight: 800, color: '#F0F0F0', marginBottom: 18 }}>
+          Criar Nova Avaliação
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Input label="Título *" value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Avaliação de Higiene Alimentar" onKeyDown={e => e.key === 'Enter' && handleCriar()} />
+          <Select label="Módulo vinculado (opcional)" value={moduloId} onChange={e => setModuloId(e.target.value)}>
+            <option value="">— Sem módulo —</option>
+            {modulos.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}
+          </Select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <Input label="Nota mínima (%)" type="number" value={notaMinima} onChange={e => setNotaMinima(e.target.value)} placeholder="70" />
+            <Input label="Tentativas" type="number" value={tentativas} onChange={e => setTentativas(e.target.value)} placeholder="3" />
+            <Input label="XP bônus (aprovação)" type="number" value={xpBonus} onChange={e => setXpBonus(e.target.value)} placeholder="100" />
+          </div>
+          <div style={{ background: '#0D0D0D', border: '1px solid #FFC10722', borderRadius: 8, padding: '10px 14px', fontSize: 11, color: '#555', lineHeight: 1.6 }}>
+            📝 Após criar a avaliação, expanda-a na lista para adicionar questões. O colaborador só acessa a avaliação após concluir todas as aulas do módulo vinculado.
+          </div>
+          <Btn onClick={handleCriar} loading={saving} style={{ alignSelf: 'flex-start' }}>+ CRIAR AVALIAÇÃO</Btn>
+        </div>
+      </Card>
+
+      {/* Lista */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 18, fontWeight: 800, color: '#F0F0F0' }}>
+            Avaliações Cadastradas
+          </div>
+          <Btn variant="ghost" onClick={carregar} style={{ fontSize: 12, padding: '6px 12px' }}>↻ ATUALIZAR</Btn>
+        </div>
+        {loading ? (
+          <div style={{ color: '#3A3A3A', fontSize: 13, padding: '20px 0' }}>Carregando...</div>
+        ) : avaliacoes.length === 0 ? (
+          <div style={{ background: '#161616', border: '1px solid #1E1E1E', borderRadius: 12, padding: '32px', textAlign: 'center', color: '#333', fontSize: 13 }}>
+            Nenhuma avaliação cadastrada ainda.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {avaliacoes.map(av => (
+              <AvaliacaoCard key={av.id} avaliacao={av} modulos={modulos} onDeleted={carregar} toast={toast} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1502,13 +2357,147 @@ function ModalPerfil({ usuario, onClose }) {
 }
 
 // ═══════════════════════════════════════════════════════
+// MODAL: Simular Conclusão (DEV only)
+// ═══════════════════════════════════════════════════════
+function ModalSimular({ usuario, onClose, toast }) {
+  const [modulos, setModulos] = useState([]);
+  const [loadingMods, setLoadingMods] = useState(true);
+  const [selectedId, setSelectedId] = useState('');
+  const [simulando, setSimulando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+
+  useEffect(() => {
+    api.getModulos()
+      .then(data => { setModulos(Array.isArray(data) ? data : []); })
+      .catch(() => setModulos([]))
+      .finally(() => setLoadingMods(false));
+  }, []);
+
+  const handleSimular = async () => {
+    if (!selectedId) return;
+    setSimulando(true);
+    try {
+      const [secoes, modulo] = await Promise.all([
+        api.getSecoes(selectedId),
+        api.getModuloById(selectedId),
+      ]);
+      const todasAulas = (Array.isArray(secoes) ? secoes : []).flatMap(s => s.aulas || []);
+      const xpAulas = todasAulas.reduce((sum, a) => sum + (a.xp ?? 10), 0);
+      const xpTotal = xpAulas + (modulo.xpBonus ?? 50);
+
+      await api.adicionarXP(usuario.id, xpTotal);
+      const cert = await api.gerarCertificado(usuario.id, Number(selectedId), null, null);
+
+      setResultado({ xpTotal, cert, modulo });
+      toast(`Simulação concluída para ${usuario.nome}! +${xpTotal} XP`, true);
+    } catch (e) {
+      toast(e.message || 'Erro ao simular conclusão', false);
+    } finally {
+      setSimulando(false);
+    }
+  };
+
+  const selectedModulo = modulos.find(m => String(m.id) === String(selectedId));
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg,#7C3AED,#3B82F6)', borderRadius: '16px 16px 0 0' }} />
+        <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 16, background: 'none', border: 'none', color: '#444', fontSize: 20, cursor: 'pointer' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#F0F0F0'} onMouseLeave={e => e.currentTarget.style.color = '#444'}>✕</button>
+
+        {/* badge dev */}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#7C3AED22', border: '1px dashed #7C3AED55', borderRadius: 6, padding: '4px 10px', marginBottom: 14 }}>
+          <span style={{ fontSize: 11 }}>🧪</span>
+          <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, fontWeight: 900, color: '#7C3AED', letterSpacing: 2 }}>AMBIENTE DE DESENVOLVIMENTO</span>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 20, fontWeight: 900, color: '#F0F0F0', lineHeight: 1 }}>Simular Conclusão</div>
+          <div style={{ fontSize: 13, color: '#555', marginTop: 4 }}>{usuario.nome} · {usuario.cargo}</div>
+        </div>
+
+        {!resultado ? (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, fontWeight: 900, color: '#444', letterSpacing: 2, marginBottom: 8 }}>
+                SELECIONAR MÓDULO
+              </label>
+              <select
+                value={selectedId}
+                onChange={e => setSelectedId(e.target.value)}
+                disabled={loadingMods || simulando}
+                style={{ width: '100%', padding: '10px 12px', background: '#111', border: '1px solid #2A2A2A', borderRadius: 8, color: selectedId ? '#E0E0E0' : '#555', fontSize: 14, fontFamily: 'Barlow, sans-serif', cursor: 'pointer', outline: 'none' }}
+              >
+                <option value="">{loadingMods ? 'Carregando módulos...' : 'Escolha um módulo...'}</option>
+                {modulos.map(m => <option key={m.id} value={m.id}>{m.titulo}</option>)}
+              </select>
+            </div>
+
+            {selectedModulo && (
+              <div style={{ background: '#111', border: '1px solid #1E1E1E', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 12, color: '#444', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ color: '#2A2A2A', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, fontWeight: 900, letterSpacing: 2, marginBottom: 4 }}>O QUE SERÁ EXECUTADO</div>
+                <div>✓ <span style={{ color: '#555' }}>XP das aulas + bônus do módulo adicionados ao colaborador</span></div>
+                <div>✓ <span style={{ color: '#555' }}>Certificado gerado automaticamente (ou reutilizado se já existe)</span></div>
+                <div style={{ marginTop: 4, color: '#2A2A2A', fontStyle: 'italic' }}>Não cria registros de progresso individual de aulas.</div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={onClose} style={{ flex: 1, padding: '11px', background: 'transparent', border: '1px solid #2A2A2A', borderRadius: 8, color: '#666', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 800, cursor: 'pointer', transition: 'all .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#CCC'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#666'; }}>
+                CANCELAR
+              </button>
+              <button
+                onClick={handleSimular}
+                disabled={!selectedId || simulando}
+                style={{ flex: 2, padding: '11px', background: selectedId && !simulando ? '#7C3AED' : '#111', border: `1px solid ${selectedId && !simulando ? '#7C3AED' : '#2A2A2A'}`, borderRadius: 8, color: selectedId && !simulando ? '#FFF' : '#444', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 900, cursor: selectedId && !simulando ? 'pointer' : 'not-allowed', transition: 'all .15s', letterSpacing: 1 }}
+                onMouseEnter={e => { if (selectedId && !simulando) e.currentTarget.style.background = '#6D28D9'; }}
+                onMouseLeave={e => { if (selectedId && !simulando) e.currentTarget.style.background = '#7C3AED'; }}
+              >
+                {simulando ? 'SIMULANDO...' : '🧪 SIMULAR CONCLUSÃO'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ background: '#22A06B15', border: '1px solid #22A06B44', borderRadius: 12, padding: '20px', textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🎓</div>
+              <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 18, fontWeight: 900, color: '#22A06B', letterSpacing: 2, marginBottom: 4 }}>SIMULAÇÃO CONCLUÍDA!</div>
+              <div style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>
+                {resultado.modulo.titulo} · <span style={{ color: '#F9A800', fontWeight: 700 }}>+{resultado.xpTotal} XP</span>
+              </div>
+              <button
+                onClick={() => window.open(`/certificado/${resultado.cert.codigoValidacao}`, '_blank')}
+                style={{ padding: '10px 24px', background: '#FFC107', border: 'none', borderRadius: 8, color: '#000', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 14, fontWeight: 900, cursor: 'pointer' }}
+              >📄 VER CERTIFICADO</button>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => { setResultado(null); setSelectedId(''); }}
+                style={{ flex: 1, padding: '10px', background: 'transparent', border: '1px solid #2A2A2A', borderRadius: 8, color: '#666', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 800, cursor: 'pointer', transition: 'all .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#CCC'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#666'; }}
+              >SIMULAR OUTRO</button>
+              <button onClick={onClose} style={{ flex: 1, padding: '10px', background: '#F9A800', border: 'none', borderRadius: 8, color: '#000', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 13, fontWeight: 900, cursor: 'pointer' }}>FECHAR</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // SEÇÃO: Lista de Colaboradores
 // ═══════════════════════════════════════════════════════
 function SecaoListaColaboradores({ toast }) {
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [perfil, setPerfil] = useState(null);       // modal aberto
-  const [excluindo, setExcluindo] = useState(null); // id em deleção
+  const [perfil, setPerfil] = useState(null);
+  const [excluindo, setExcluindo] = useState(null);
+  const [simularUsuario, setSimularUsuario] = useState(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -1544,6 +2533,9 @@ function SecaoListaColaboradores({ toast }) {
   return (
     <>
       <ModalPerfil usuario={perfil} onClose={() => setPerfil(null)} />
+      {import.meta.env.DEV && simularUsuario && (
+        <ModalSimular usuario={simularUsuario} onClose={() => setSimularUsuario(null)} toast={toast} />
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <div>
@@ -1649,6 +2641,20 @@ function SecaoListaColaboradores({ toast }) {
                     onMouseLeave={e => { e.currentTarget.style.background = '#E05A2B11'; }}
                   >{isExcluindo ? 'EXCLUINDO...' : 'EXCLUIR'}</button>
                 </div>
+                {import.meta.env.DEV && (
+                  <button
+                    onClick={() => setSimularUsuario(u)}
+                    style={{
+                      width: '100%', padding: '7px 0', borderRadius: 7,
+                      border: '1px dashed #7C3AED44', background: 'transparent',
+                      color: '#7C3AED99', cursor: 'pointer',
+                      fontFamily: 'Barlow Condensed, sans-serif', fontSize: 12, fontWeight: 700,
+                      transition: 'all .15s', letterSpacing: 0.5,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#7C3AED88'; e.currentTarget.style.color = '#7C3AED'; e.currentTarget.style.background = '#7C3AED11'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#7C3AED44'; e.currentTarget.style.color = '#7C3AED99'; e.currentTarget.style.background = 'transparent'; }}
+                  >🧪 Simular Conclusão</button>
+                )}
               </div>
             );
           })}
@@ -1665,6 +2671,7 @@ const TABS = [
   { id: 'visao', label: '◈ Visão Geral' },
   { id: 'trilhas', label: '🛤 Trilhas' },
   { id: 'modulos', label: '📦 Módulos' },
+  { id: 'avaliacoes', label: '📝 Avaliações' },
   { id: 'colaboradores', label: '👤 Cadastrar' },
   { id: 'lista', label: '📋 Colaboradores' },
 ];
@@ -1709,6 +2716,7 @@ export default function Manager() {
       {tab === 'visao' && <SecaoVisaoGeral team={MOCK_TEAM} />}
       {tab === 'trilhas' && <SecaoTrilhas toast={showToast} />}
       {tab === 'modulos' && <SecaoModulos toast={showToast} />}
+      {tab === 'avaliacoes' && <SecaoAvaliacoes toast={showToast} />}
       {tab === 'colaboradores' && <SecaoColaboradores toast={showToast} />}
       {tab === 'lista' && <SecaoListaColaboradores toast={showToast} />}
 
