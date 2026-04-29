@@ -167,6 +167,13 @@ export const api = {
       return res.json();
     }),
 
+  // Auth (senha)
+  forgotPassword: (email) =>
+    request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  resetPassword: (token, senha) =>
+    request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, senha }) }),
+
   // Avaliações
   getAvaliacoes: (moduloId) =>
     request(moduloId ? `/avaliacoes?moduloId=${moduloId}` : '/avaliacoes'),

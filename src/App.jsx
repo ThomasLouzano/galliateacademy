@@ -17,6 +17,8 @@ import VideoPlayer from './pages/VideoPlayer';
 import AvaliacaoPage from './pages/AvaliacaoPage';
 import CertificadoPage from './pages/CertificadoPage';
 import MeusCertificadosPage from './pages/MeusCertificadosPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function RequireAuth() {
   const auth = useAuth();
@@ -78,6 +80,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Home />} />

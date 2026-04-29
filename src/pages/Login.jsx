@@ -102,7 +102,18 @@ export default function Login() {
           </button>
         </div>
 
-        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: '#2A2A2A' }}>
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <button
+            onClick={() => navigate('/forgot-password')}
+            style={{
+              background: 'none', border: 'none', color: '#555', fontSize: 12,
+              cursor: 'pointer', textDecoration: 'underline', fontFamily: 'Barlow, sans-serif',
+            }}
+          >
+            Esqueci minha senha
+          </button>
+        </div>
+        <div style={{ marginTop: 10, textAlign: 'center', fontSize: 12, color: '#2A2A2A' }}>
           Deixe os campos em branco para entrar como demo
         </div>
       </div>
