@@ -1153,6 +1153,66 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
   );
 }
 
+function ChecklistItemRow({ texto, idx, aulaId, onSaved, toast }) {
+  const [editando, setEditando] = useState(false);
+  const [textoTemp, setTextoTemp] = useState(texto);
+  const [salvando, setSalvando] = useState(false);
+
+  const handleSalvar = async () => {
+    if (!textoTemp.trim()) return;
+    setSalvando(true);
+    try {
+      const resp = await api.atualizarChecklistItem(aulaId, idx, textoTemp.trim());
+      onSaved(resp.checklist);
+      setEditando(false);
+    } catch (e) {
+      toast(e.message || 'Erro ao atualizar item', false);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  if (editando) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input
+          value={textoTemp}
+          onChange={e => setTextoTemp(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') handleSalvar();
+            if (e.key === 'Escape') { setTextoTemp(texto); setEditando(false); }
+          }}
+          autoFocus
+          style={{ flex: 1, padding: '5px 9px', background: '#111', border: '1px solid #FFC10799', borderRadius: 5, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 12, outline: 'none' }}
+        />
+        <button
+          onClick={handleSalvar}
+          disabled={salvando}
+          style={{ padding: '4px 10px', background: '#FFC107', border: 'none', borderRadius: 5, color: '#000', fontSize: 11, fontWeight: 800, cursor: salvando ? 'not-allowed' : 'pointer', flexShrink: 0, fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: 0.5 }}
+        >{salvando ? '...' : '✓ Salvar'}</button>
+        <button
+          onClick={() => { setTextoTemp(texto); setEditando(false); }}
+          style={{ padding: '4px 10px', background: 'transparent', border: '1px solid #333', borderRadius: 5, color: '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0, fontFamily: 'Barlow Condensed, sans-serif' }}
+        >✗ Cancelar</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ color: '#F9A800', flexShrink: 0, fontSize: 12 }}>☐</span>
+      <span style={{ flex: 1, fontSize: 12, color: '#888' }}>{texto}</span>
+      <button
+        onClick={e => { e.stopPropagation(); setTextoTemp(texto); setEditando(true); }}
+        title="Editar item"
+        style={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 4, color: '#AAA', cursor: 'pointer', fontSize: 11, padding: '2px 7px', flexShrink: 0, lineHeight: 1.4, fontFamily: 'Barlow, sans-serif', transition: 'border-color .15s, color .15s' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#FFC107'; e.currentTarget.style.color = '#FFC107'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#AAA'; }}
+      >✏️</button>
+    </div>
+  );
+}
+
 function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}, dragHandleAttributes = {}, isDragging = false }) {
   const [aula, setAula] = useState(aulaInicial);
   const [expanded, setExpanded] = useState(false);
@@ -1168,9 +1228,6 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
   const [editApostilaTipo, setEditApostilaTipo] = useState('url');
   const [editApostilaUrl, setEditApostilaUrl] = useState('');
   const [editApostilaFile, setEditApostilaFile] = useState(null);
-  const [editandoItemIdx, setEditandoItemIdx] = useState(null);
-  const [editandoItemTexto, setEditandoItemTexto] = useState('');
-  const [salvandoItem, setSalvandoItem] = useState(false);
   const [localChecklist, setLocalChecklist] = useState(() => {
     try { return aulaInicial.checklist ? JSON.parse(aulaInicial.checklist) : []; }
     catch { return []; }
@@ -1184,20 +1241,6 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
       if (dur) setEditDuracao(dur);
     } finally {
       setFetchingEditDuracao(false);
-    }
-  };
-
-  const handleSalvarItem = async (idx) => {
-    if (!editandoItemTexto.trim()) return;
-    setSalvandoItem(true);
-    try {
-      const resp = await api.atualizarChecklistItem(aula.id, idx, editandoItemTexto.trim());
-      setLocalChecklist(resp.checklist);
-      setEditandoItemIdx(null);
-    } catch (e) {
-      toast(e.message || 'Erro ao atualizar item', false);
-    } finally {
-      setSalvandoItem(false);
     }
   };
 
@@ -1426,40 +1469,14 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
               <div style={{ fontSize: 10, fontWeight: 800, color: '#666', letterSpacing: 2, marginBottom: 6 }}>CHECKLIST</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {localChecklist.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {editandoItemIdx === i ? (
-                      <>
-                        <input
-                          value={editandoItemTexto}
-                          onChange={e => setEditandoItemTexto(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleSalvarItem(i); if (e.key === 'Escape') setEditandoItemIdx(null); }}
-                          autoFocus
-                          style={{ flex: 1, padding: '5px 9px', background: '#111', border: '1px solid #FFC10799', borderRadius: 5, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 12, outline: 'none' }}
-                        />
-                        <button
-                          onClick={() => handleSalvarItem(i)}
-                          disabled={salvandoItem}
-                          style={{ padding: '4px 10px', background: '#FFC107', border: 'none', borderRadius: 5, color: '#000', fontSize: 11, fontWeight: 800, cursor: salvandoItem ? 'not-allowed' : 'pointer', flexShrink: 0, fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: 0.5 }}
-                        >{salvandoItem ? '...' : '✓ Salvar'}</button>
-                        <button
-                          onClick={() => setEditandoItemIdx(null)}
-                          style={{ padding: '4px 10px', background: 'transparent', border: '1px solid #333', borderRadius: 5, color: '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0, fontFamily: 'Barlow Condensed, sans-serif' }}
-                        >✗ Cancelar</button>
-                      </>
-                    ) : (
-                      <>
-                        <span style={{ color: '#F9A800', flexShrink: 0, fontSize: 12 }}>☐</span>
-                        <span style={{ flex: 1, fontSize: 12, color: '#888' }}>{item}</span>
-                        <button
-                          onClick={e => { e.stopPropagation(); setEditandoItemIdx(i); setEditandoItemTexto(item); }}
-                          title="Editar item"
-                          style={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 4, color: '#AAA', cursor: 'pointer', fontSize: 11, padding: '2px 7px', flexShrink: 0, lineHeight: 1.4, fontFamily: 'Barlow, sans-serif', transition: 'border-color .15s, color .15s' }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#FFC107'; e.currentTarget.style.color = '#FFC107'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A'; e.currentTarget.style.color = '#AAA'; }}
-                        >✏️</button>
-                      </>
-                    )}
-                  </div>
+                  <ChecklistItemRow
+                    key={i}
+                    texto={item}
+                    idx={i}
+                    aulaId={aula.id}
+                    onSaved={setLocalChecklist}
+                    toast={toast}
+                  />
                 ))}
               </div>
             </div>
