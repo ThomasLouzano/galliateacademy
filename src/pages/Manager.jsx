@@ -1153,95 +1153,49 @@ function AulaForm({ secaoId, onSaved, onCancel, toast }) {
   );
 }
 
-function ChecklistItemRow({ texto, idx, aulaId, onSaved, toast }) {
+function ChecklistItemRow({ item, aulaId, onSaved, onDelete }) {
   const [editando, setEditando] = useState(false);
-  const [textoTemp, setTextoTemp] = useState(texto);
+  const [textoTemp, setTextoTemp] = useState(item.texto);
   const [salvando, setSalvando] = useState(false);
-  const [removendo, setRemovendo] = useState(false);
 
-  const handleSalvar = async () => {
-    if (!textoTemp.trim()) return;
+  async function salvar() {
     setSalvando(true);
     try {
-      const resp = await api.atualizarChecklistItem(aulaId, idx, textoTemp.trim());
-      onSaved(resp.checklist);
+      const resp = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/checklists/${aulaId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('ga_token')}` },
+        body: JSON.stringify({ index: item.idx, texto: textoTemp }),
+      });
+      const data = await resp.json();
+      onSaved(data.checklist);
       setEditando(false);
-    } catch (e) {
-      toast(e.message || 'Erro ao atualizar item', false);
     } finally {
       setSalvando(false);
     }
-  };
-
-  const handleRemover = async () => {
-    setRemovendo(true);
-    try {
-      const resp = await api.removerChecklistItem(aulaId, idx);
-      onSaved(resp.checklist);
-    } catch (e) {
-      toast(e.message || 'Erro ao remover item', false);
-      setRemovendo(false);
-    }
-  };
+  }
 
   if (editando) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, background: '#1A1A1A', borderRadius: 6, padding: '6px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0' }}>
         <input
           value={textoTemp}
           onChange={e => setTextoTemp(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') handleSalvar();
-            if (e.key === 'Escape') { setTextoTemp(texto); setEditando(false); }
-          }}
+          onKeyDown={e => e.key === 'Enter' && salvar()}
+          style={{ flex: 1, background: '#1A1A1A', border: '1px solid #FFC107', color: '#fff', borderRadius: '4px', padding: '4px 8px' }}
           autoFocus
-          style={{ flex: 1, padding: '4px 8px', background: '#0D0D0D', border: '1px solid #FFC107', borderRadius: 5, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: '13px', outline: 'none' }}
         />
-        <button
-          onClick={handleSalvar}
-          disabled={salvando}
-          style={{ background: '#FFC107', border: 'none', color: '#000', cursor: salvando ? 'not-allowed' : 'pointer', fontSize: '13px', padding: '4px 12px', marginLeft: '8px', borderRadius: 5, fontWeight: 700, whiteSpace: 'nowrap' }}
-        >{salvando ? '...' : '✓ Salvar'}</button>
-        <button
-          onClick={() => { setTextoTemp(texto); setEditando(false); }}
-          style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', fontSize: '13px', padding: '4px 8px', marginLeft: '4px' }}
-        >✗ Cancelar</button>
+        <button onClick={salvar} disabled={salvando} style={{ background: '#FFC107', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer', fontWeight: 'bold' }}>✓</button>
+        <button onClick={() => { setTextoTemp(item.texto); setEditando(false); }} style={{ background: 'transparent', color: '#999', border: '1px solid #444', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer' }}>✗</button>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1A1A1A', borderRadius: 6, padding: '6px 10px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-        <span style={{ color: '#FFC107', flexShrink: 0, fontSize: '13px' }}>☐</span>
-        <span style={{ fontSize: '13px', color: '#CCC' }}>{texto}</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        <button
-          onClick={() => { setTextoTemp(texto); setEditando(true); }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#FFC107',
-            cursor: 'pointer',
-            fontSize: '14px',
-            padding: '2px 6px',
-            marginLeft: '8px',
-          }}
-        >✏️</button>
-        <button
-          onClick={() => handleRemover()}
-          disabled={removendo}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#EF4444',
-            cursor: removendo ? 'not-allowed' : 'pointer',
-            fontSize: '14px',
-            padding: '2px 6px',
-            marginLeft: '4px',
-          }}
-        >{removendo ? '...' : '🗑️'}</button>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #222' }}>
+      <span style={{ color: '#ccc', flex: 1 }}>☐ {item.texto}</span>
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <button onClick={() => setEditando(true)} style={{ background: 'transparent', border: 'none', color: '#FFC107', cursor: 'pointer', fontSize: '16px', padding: '2px 6px' }}>✏️</button>
+        <button onClick={() => onDelete(item.idx)} style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '16px', padding: '2px 6px' }}>🗑️</button>
       </div>
     </div>
   );
@@ -1502,14 +1456,16 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: '#666', letterSpacing: 2, marginBottom: 6 }}>CHECKLIST</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {localChecklist.map((item, i) => (
+                {localChecklist.map((texto, i) => (
                   <ChecklistItemRow
                     key={i}
-                    texto={item}
-                    idx={i}
+                    item={{ texto, idx: i }}
                     aulaId={aula.id}
                     onSaved={setLocalChecklist}
-                    toast={toast}
+                    onDelete={async (idx) => {
+                      const resp = await api.removerChecklistItem(aula.id, idx);
+                      setLocalChecklist(resp.checklist);
+                    }}
                   />
                 ))}
               </div>
