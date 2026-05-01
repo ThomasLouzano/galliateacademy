@@ -1186,7 +1186,7 @@ function ChecklistItemRow({ texto, idx, aulaId, onSaved, toast }) {
 
   if (editando) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#1A1A1A', borderRadius: 6, padding: '6px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, background: '#1A1A1A', borderRadius: 6, padding: '6px 10px' }}>
         <input
           value={textoTemp}
           onChange={e => setTextoTemp(e.target.value)}
@@ -1195,43 +1195,53 @@ function ChecklistItemRow({ texto, idx, aulaId, onSaved, toast }) {
             if (e.key === 'Escape') { setTextoTemp(texto); setEditando(false); }
           }}
           autoFocus
-          style={{ flex: 1, padding: '4px 8px', background: '#0D0D0D', border: '1px solid #FFC107', borderRadius: 5, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 12, outline: 'none' }}
+          style={{ flex: 1, padding: '4px 8px', background: '#0D0D0D', border: '1px solid #FFC107', borderRadius: 5, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: '13px', outline: 'none' }}
         />
         <button
           onClick={handleSalvar}
           disabled={salvando}
-          style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', background: '#FFC107', border: 'none', borderRadius: 5, color: '#000', fontSize: 11, fontWeight: 800, cursor: salvando ? 'not-allowed' : 'pointer', flexShrink: 0, fontFamily: 'Barlow Condensed, sans-serif', whiteSpace: 'nowrap' }}
+          style={{ background: '#FFC107', border: 'none', color: '#000', cursor: salvando ? 'not-allowed' : 'pointer', fontSize: '13px', padding: '4px 12px', marginLeft: '8px', borderRadius: 5, fontWeight: 700, whiteSpace: 'nowrap' }}
         >{salvando ? '...' : '✓ Salvar'}</button>
         <button
           onClick={() => { setTextoTemp(texto); setEditando(false); }}
-          style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', background: 'transparent', border: '1px solid #444', borderRadius: 5, color: '#888', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0, fontFamily: 'Barlow Condensed, sans-serif', whiteSpace: 'nowrap' }}
+          style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', fontSize: '13px', padding: '4px 8px', marginLeft: '4px' }}
         >✗ Cancelar</button>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: '#1A1A1A', borderRadius: 6, padding: '6px 10px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1A1A1A', borderRadius: 6, padding: '6px 10px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-        <span style={{ color: '#FFC107', flexShrink: 0, fontSize: 13 }}>☐</span>
-        <span style={{ fontSize: 12, color: '#CCC', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{texto}</span>
+        <span style={{ color: '#FFC107', flexShrink: 0, fontSize: '13px' }}>☐</span>
+        <span style={{ fontSize: '13px', color: '#CCC' }}>{texto}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <button
-          onClick={e => { e.stopPropagation(); setTextoTemp(texto); setEditando(true); }}
-          title="Editar item"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: '#252525', border: '1px solid #444', borderRadius: 4, color: '#CCC', cursor: 'pointer', fontSize: 11, fontFamily: 'Barlow, sans-serif', flexShrink: 0, whiteSpace: 'nowrap' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#FFC10720'; e.currentTarget.style.borderColor = '#FFC107'; e.currentTarget.style.color = '#FFC107'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#252525'; e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#CCC'; }}
-        >✏️ Editar</button>
+          onClick={() => { setTextoTemp(texto); setEditando(true); }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#FFC107',
+            cursor: 'pointer',
+            fontSize: '14px',
+            padding: '2px 6px',
+            marginLeft: '8px',
+          }}
+        >✏️</button>
         <button
-          onClick={e => { e.stopPropagation(); handleRemover(); }}
-          title="Remover item"
+          onClick={() => handleRemover()}
           disabled={removendo}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: '#252525', border: '1px solid #444', borderRadius: 4, color: '#CCC', cursor: removendo ? 'not-allowed' : 'pointer', fontSize: 11, fontFamily: 'Barlow, sans-serif', flexShrink: 0, whiteSpace: 'nowrap' }}
-          onMouseEnter={e => { if (!removendo) { e.currentTarget.style.background = '#E05A2B20'; e.currentTarget.style.borderColor = '#E05A2B'; e.currentTarget.style.color = '#E05A2B'; }}}
-          onMouseLeave={e => { e.currentTarget.style.background = '#252525'; e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.color = '#CCC'; }}
-        >{removendo ? '...' : '🗑️ Remover'}</button>
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#EF4444',
+            cursor: removendo ? 'not-allowed' : 'pointer',
+            fontSize: '14px',
+            padding: '2px 6px',
+            marginLeft: '4px',
+          }}
+        >{removendo ? '...' : '🗑️'}</button>
       </div>
     </div>
   );
