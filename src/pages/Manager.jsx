@@ -1425,6 +1425,27 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
               )}
             </div>
 
+            {/* Checklist (editável direto no formulário) */}
+            {localChecklist.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#555', letterSpacing: 1 }}>CHECKLIST</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {localChecklist.map((texto, i) => (
+                    <ChecklistItemRow
+                      key={i}
+                      item={{ texto, idx: i }}
+                      aulaId={aula.id}
+                      onSaved={setLocalChecklist}
+                      onDelete={async (idx) => {
+                        const resp = await api.removerChecklistItem(aula.id, idx);
+                        setLocalChecklist(resp.checklist);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={handleSalvarEdicao}
