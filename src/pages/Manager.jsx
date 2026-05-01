@@ -1283,8 +1283,8 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
           <span style={{ fontSize: 10, color: '#F9A80088', background: '#F9A80011', borderRadius: 4, padding: '2px 7px' }}>⚡{aula.xp ?? 10} XP</span>
         )}
         {aula.videoUrl && !editando && <span style={{ fontSize: 11, color: '#8B7FE8' }}>▶</span>}
-        {checklist.length > 0 && !editando && (
-          <span style={{ fontSize: 10, color: '#F9A80088', background: '#F9A80011', borderRadius: 4, padding: '2px 7px' }}>☐ {checklist.length}</span>
+        {localChecklist.length > 0 && !editando && (
+          <span style={{ fontSize: 10, color: '#F9A80088', background: '#F9A80011', borderRadius: 4, padding: '2px 7px' }}>☐ {localChecklist.length}</span>
         )}
         {!editando && (
           <span style={{ fontSize: 11, color: '#333', display: 'inline-block', transition: 'transform .2s', transform: expanded ? 'rotate(180deg)' : 'none' }}>▾</span>
