@@ -103,6 +103,9 @@ export const api = {
 
   excluirSecao: (id) => request(`/secoes/${id}`, { method: 'DELETE' }),
 
+  atualizarSecao: (id, data) =>
+    request(`/secoes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
   // Aulas
   getAulas: (secaoId) => request(`/aulas?secaoId=${secaoId}`),
 
@@ -119,6 +122,12 @@ export const api = {
     }),
 
   excluirAula: (id) => request(`/aulas/${id}`, { method: 'DELETE' }),
+
+  atualizarChecklistItem: (aulaId, index, texto) =>
+    request(`/checklists/${aulaId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ index, texto }),
+    }),
 
   // Apostila (upload multipart)
   uploadApostila: (aulaId, file) => {

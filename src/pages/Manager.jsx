@@ -1168,6 +1168,9 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
   const [editApostilaTipo, setEditApostilaTipo] = useState('url');
   const [editApostilaUrl, setEditApostilaUrl] = useState('');
   const [editApostilaFile, setEditApostilaFile] = useState(null);
+  const [editandoItemIdx, setEditandoItemIdx] = useState(null);
+  const [editandoItemTexto, setEditandoItemTexto] = useState('');
+  const [salvandoItem, setSalvandoItem] = useState(false);
 
   const handleEditVideoUrlBlur = async (url) => {
     if (!extractYouTubeId(url)) return;
@@ -1181,6 +1184,20 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
   };
 
   const checklist = (() => { try { return aula.checklist ? JSON.parse(aula.checklist) : []; } catch { return []; } })();
+
+  const handleSalvarItem = async (idx) => {
+    if (!editandoItemTexto.trim()) return;
+    setSalvandoItem(true);
+    try {
+      const resp = await api.atualizarChecklistItem(aula.id, idx, editandoItemTexto.trim());
+      setAula(prev => ({ ...prev, checklist: JSON.stringify(resp.checklist) }));
+      setEditandoItemIdx(null);
+    } catch (e) {
+      toast(e.message || 'Erro ao atualizar item', false);
+    } finally {
+      setSalvandoItem(false);
+    }
+  };
 
   const abrirEdicao = (e) => {
     e.stopPropagation();
@@ -1407,8 +1424,39 @@ function AulaRow({ aula: aulaInicial, onDeleted, toast, dragHandleListeners = {}
               <div style={{ fontSize: 10, fontWeight: 800, color: '#2A2A2A', letterSpacing: 2, marginBottom: 6 }}>CHECKLIST</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {checklist.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#555' }}>
-                    <span style={{ color: '#F9A800', flexShrink: 0 }}>☐</span>{item}
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12 }}>
+                    {editandoItemIdx === i ? (
+                      <>
+                        <input
+                          value={editandoItemTexto}
+                          onChange={e => setEditandoItemTexto(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSalvarItem(i); if (e.key === 'Escape') setEditandoItemIdx(null); }}
+                          autoFocus
+                          style={{ flex: 1, padding: '4px 8px', background: '#111', border: '1px solid #FFC10766', borderRadius: 5, color: '#F0F0F0', fontFamily: 'Barlow, sans-serif', fontSize: 12, outline: 'none' }}
+                        />
+                        <button
+                          onClick={() => handleSalvarItem(i)}
+                          disabled={salvandoItem}
+                          style={{ padding: '3px 9px', background: '#FFC107', border: 'none', borderRadius: 5, color: '#000', fontSize: 11, fontWeight: 700, cursor: salvandoItem ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                        >{salvandoItem ? '...' : 'Salvar'}</button>
+                        <button
+                          onClick={() => setEditandoItemIdx(null)}
+                          style={{ padding: '3px 9px', background: 'transparent', border: '1px solid #333', borderRadius: 5, color: '#888', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+                        >Cancelar</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ color: '#F9A800', flexShrink: 0 }}>☐</span>
+                        <span style={{ flex: 1, color: '#555' }}>{item}</span>
+                        <button
+                          onClick={e => { e.stopPropagation(); setEditandoItemIdx(i); setEditandoItemTexto(item); }}
+                          title="Editar item"
+                          style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 13, padding: '0 2px', flexShrink: 0, lineHeight: 1, transition: 'color .15s' }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#FFC107'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#444'}
+                        >✏️</button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1444,7 +1492,7 @@ function SortableAulaRow({ aula, onDeleted, toast }) {
   );
 }
 
-function SecaoCard({ secao: secaoInicial, onDeleted, toast }) {
+function SecaoCard({ secao: secaoInicial, onDeleted, toast, dragHandleListeners = {}, dragHandleAttributes = {}, isDragging = false }) {
   const [aulas, setAulas] = useState(secaoInicial.aulas || []);
   const [showForm, setShowForm] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
@@ -1490,9 +1538,17 @@ function SecaoCard({ secao: secaoInicial, onDeleted, toast }) {
   };
 
   return (
-    <Card style={{ borderColor: '#222' }}>
+    <Card style={{ borderColor: isDragging ? '#FFC10766' : '#222', opacity: isDragging ? 0.5 : 1, transition: 'border-color .15s, opacity .15s' }}>
       {/* Cabeçalho da seção */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <span
+          {...dragHandleListeners}
+          {...dragHandleAttributes}
+          onClick={e => e.stopPropagation()}
+          style={{ color: '#2A2A2A', fontSize: 18, cursor: 'grab', touchAction: 'none', flexShrink: 0, lineHeight: 1, padding: '0 2px', transition: 'color .15s', userSelect: 'none' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#FFC107'}
+          onMouseLeave={e => e.currentTarget.style.color = '#2A2A2A'}
+        >⠿</span>
         <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, fontWeight: 800, color: '#F9A800', letterSpacing: 2, flexShrink: 0 }}>SEÇÃO</span>
         <div style={{ flex: 1, fontFamily: 'Barlow Condensed, sans-serif', fontSize: 18, fontWeight: 800, color: '#E0E0E0' }}>{secaoInicial.titulo}</div>
         <Btn variant="danger" onClick={handleDeleteSecao} loading={excluindo} style={{ fontSize: 11, padding: '5px 10px', flexShrink: 0 }}>
@@ -1531,11 +1587,39 @@ function SecaoCard({ secao: secaoInicial, onDeleted, toast }) {
   );
 }
 
+function SortableSecaoCard({ secao, onDeleted, toast }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: secao.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : 'auto',
+        position: 'relative',
+      }}
+    >
+      <SecaoCard
+        secao={secao}
+        onDeleted={onDeleted}
+        toast={toast}
+        dragHandleListeners={listeners}
+        dragHandleAttributes={attributes}
+        isDragging={isDragging}
+      />
+    </div>
+  );
+}
+
 function ModuloEditor({ modulo, onVoltar, toast }) {
   const [secoes, setSecoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [novaSecaoTitulo, setNovaSecaoTitulo] = useState('');
   const [savingSecao, setSavingSecao] = useState(false);
+
+  const sensorSecoes = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+  );
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -1550,6 +1634,22 @@ function ModuloEditor({ modulo, onVoltar, toast }) {
   }, [modulo.id]);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  const handleDragEndSecoes = async ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const oldIdx = secoes.findIndex(s => s.id === active.id);
+    const newIdx = secoes.findIndex(s => s.id === over.id);
+    const reordenadas = arrayMove(secoes, oldIdx, newIdx);
+    setSecoes(reordenadas);
+    try {
+      await Promise.all(
+        reordenadas.map((s, idx) => api.atualizarSecao(s.id, { ordem: idx }))
+      );
+    } catch {
+      toast('Erro ao salvar nova ordem das seções', false);
+      carregar();
+    }
+  };
 
   const handleAddSecao = async () => {
     if (!novaSecaoTitulo.trim()) { toast('Título da seção é obrigatório', false); return; }
@@ -1592,11 +1692,15 @@ function ModuloEditor({ modulo, onVoltar, toast }) {
               Nenhuma seção criada ainda. Adicione a primeira abaixo.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
-              {secoes.map(s => (
-                <SecaoCard key={s.id} secao={s} onDeleted={carregar} toast={toast} />
-              ))}
-            </div>
+            <DndContext sensors={sensorSecoes} collisionDetection={closestCenter} onDragEnd={handleDragEndSecoes}>
+              <SortableContext items={secoes.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+                  {secoes.map(s => (
+                    <SortableSecaoCard key={s.id} secao={s} onDeleted={carregar} toast={toast} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
 
           {/* Adicionar seção */}
