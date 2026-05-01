@@ -129,6 +129,12 @@ export const api = {
       body: JSON.stringify({ index, texto }),
     }),
 
+  removerChecklistItem: (aulaId, index) =>
+    request(`/checklists/${aulaId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ index }),
+    }),
+
   // Apostila (upload multipart)
   uploadApostila: (aulaId, file) => {
     const token = localStorage.getItem('ga_token');
